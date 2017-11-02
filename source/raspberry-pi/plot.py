@@ -3,50 +3,86 @@ import matplotlib.ticker as ticker
 import matplotlib.dates as mdates
 import json
 import datetime
+import os.path
+
+src_folder = "html/JSON/"
+dst_folder = "static/assets/"
+week_fn = "weeks.json"
+days_fn = "days.json"
+params = ['temp', 'hum', 'co2']
+sensor_fn = "sensor_data.json"
+
+def make_day(sensor_data_log, day, param):
+    date = day.strftime("%d%m%y")
+
+    if date in sensor_data_log.keys():
+        counter = 0
+        readings = []
+        for hour in range(24):
+            total = 0
+            num = 0
+            for r in sensor_data_log[date]:
+                t = r['time']
+                h = datetime.datetime.strptime(t, "%H:%M").hour
+                if h > hour:
+                    break
+                if h == hour:
+                    total += r[param]
+                    num += 1
+            if num > 0:
+                readings.append(total/num)
+            else:
+                readings.append(0)
+
+    else:
+        readings = [0]*24
 
 
-def make_plot(param, data):
-    #Current time
 
-    times = []
-    plots = []
+    return {'values': readings}
 
-    for entry in data:
-        t = entry['timestamp']
-        date = datetime.datetime.strptime(t, "%H:%M")
-        times.append(date)
-        plots.append(entry[param])
+def make_week():
+    today = datetime.datetime.today()
 
-    print times
+    week = []
+    days = {}
+    for param in params:
+        days[param] = []
 
-    print plots
+    sensor_path = src_folder + sensor_fn
 
-    # Look back 120 minutes. TODO: Adjust this to fit actual interval times
-    fig, ax = plt.subplots()
+    if os.path.isfile(sensor_path):
+        sensor_data_file = open(sensor_path, 'r')
+        sensor_data_log = json.load(sensor_data_file)
 
-    # Title the plot
-    plt.title(param + "  " + data[-1]['timestamp'])
-    ax.plot(times, plots)
+    for i in reversed(range(7)):
+        day = today - datetime.timedelta(days=i)
 
-    # Format the x-axis to Hours : Minutes
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
-    plt.gcf().autofmt_xdate()
+        for param in params:
+            days[param].append(make_day(sensor_data_log, day, param))
 
-    # Save the result as a .SVG
-    folder = 'html/'
-    plt.savefig(folder+param+'.svg')
+        week.append(day.strftime("%a"))
+
+    for param in params:
+        days_path = dst_folder+param+"_"+days_fn
+        days_data_file = open(days_path, 'w')
+        days_data_log = days[param]
+        days_data_file.write(json.dumps(days_data_log))
+        days_data_file.close()
+
+    week_path = dst_folder+week_fn
+    week_data_file = open(week_path, 'w')
+
+    week_data_log = week
+
+    week_data_file.write(json.dumps(week_data_log))
+
+    week_data_file.close()
+
+def make_plot():
+    make_week()
+
 
 
 if __name__ == "__main__":
-    fn = datetime.datetime.now().strftime("%d%m%y.json")
-    folder = "JSON/"
-    path = folder + fn
-    with open(path) as data_file:
-        json = json.load(data_file)
-    if len(json) > 0:
-        recent_data = json
-        make_plot('temperature', recent_data)
-        make_plot('humidity', recent_data)
-        make_plot('co2', recent_data)
-    else:
-        print "lacking data"
+    make_plot()

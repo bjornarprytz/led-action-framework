@@ -5,6 +5,10 @@ import serial as s
 import numpy as np
 import json
 import os.path
+import glob
+
+src_folder = "html/JSON/"
+
 # import threading as t
 
 # Communication between the RPi and Arduino are done in packets of 1 byte:
@@ -55,32 +59,33 @@ class PlantEnvironmentControl:
             print "update co2 ppm"
             self.co2_ppm = self.receive_float()
 
-    def log(self):
+    def log(self, path):
         now = datetime.datetime.now()
 
         # Fail-safe against rampant logging
         if now - self.last_log < datetime.timedelta(minutes=1):
             return
 
-        fn = now.strftime("%d%m%y.json")
-        folder = "JSON/"
-
-        path = folder + fn
-
         if os.path.isfile(path):
             data_file = open(path, 'r+w')
             data_log = json.load(data_file)
         else:
             data_file = open(path, 'w+')
-            data_log = []
+            data_log = {}
 
-        entry = { 'timestamp' : now.strftime("%H:%M"),
-        'temperature' : self.temperature,
-        'humidity' : self.humidity,
+        entry = {
+        'time' : now.strftime("%H:%M"),
+        'temp' : self.temperature,
+        'hum' : self.humidity,
         'co2' : self.co2_ppm
         }
 
-        data_log.append(entry)
+        day = now.strftime("%d%m%y")
+
+        if day in data_log.keys():
+            data_log[day].append(entry)
+        else:
+            data_log[day] = [entry]
 
         data_file.seek(0)
         data_file.write(json.dumps(data_log))
@@ -93,7 +98,7 @@ class PlantEnvironmentControl:
     def control(self, control):
 
         if control == "0":
-            self.log()
+            self.log(src_folder + "sensor_data.json")
         if control == "1":
             self.update(TEMPERATURE)
         if control == "2":
@@ -170,9 +175,12 @@ class PlantEnvironmentControl:
 
 
 
+
+
+
 if __name__ == "__main__":
     ser = s.Serial(
-        port='/dev/ttyACM1',
+        port='/dev/ttyACM0',
         baudrate=9600,
         parity=s.PARITY_NONE,
         stopbits=s.STOPBITS_ONE,
