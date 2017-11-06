@@ -1,5 +1,10 @@
 // By Bjørnar Prytz
 
+#include <Wire.h>
+
+// I2C stuff
+const char device_address = 0x28;
+
 
 const byte CONTROL_MASK = B10000000;
 
@@ -24,12 +29,43 @@ float temperature = 14.24512;
 float humidity = 61.14214;
 float co2_ppm = 12.23;
 
+// State Machine
+unsigned long previousMillis = 0;
+unsigned long interval = 10000; // 10 seconds between each reading
+
 // For debugging:
 byte fan_speed = 0;
 byte servo_pos = 0;
 byte LED_red   = 0;
 byte LED_white = 0;
 byte LED_blue  = 0;
+
+
+void hum_temp_reading(char address) {
+// Wire Master Reader
+// by Nicholas Zambetti <http://www.zambetti.com>
+  int RSP_SIZE = 4; // Humidity / temperature data is 4 bytes
+  byte data[RSP_SIZE];
+  
+  // Signal the device to do a reading
+  Wire.beginTransmission(address);
+  Wire.write(1);
+  Wire.endTransmission();
+
+  delay(60); // Wait for the sensor to do the task
+  
+  Wire.requestFrom(address, RSP_SIZE);
+  
+  data[0] = Wire.read();
+  data[1] = Wire.read();
+  data[2] = Wire.read();
+  data[3] = Wire.read();
+  
+  
+  humidity = ((data[0] & 0x3f) << 8 | data[1]) * (100.0 / 0x3fff);
+  temperature = (data[2] << 8 | (data[3] & 0xfc)) * (165.0 / 0xfffc) - 40;
+}
+
 
 bool wait_and_listen(unsigned int patience) {
   while (patience > 0) {
@@ -52,17 +88,24 @@ bool is_data(byte packet) {
 void setup() {
   Serial.begin(9600);  // start serial communication
 
+  Wire.begin();// join i2c bus (address optional for master)
+
+
+  // for debug
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
 
   // Warmup CO2 sensor (start a timer?)
 }
 
+bool on = false;
+
 void loop() {
   byte packet = 0;
-  digitalWrite(LED_BUILTIN, LOW);
+  unsigned long currentMillis = millis();
+  
+  
   if (Serial.available() > 0) {
-    digitalWrite(LED_BUILTIN, HIGH);
     packet = Serial.read();
     
     if (is_instruction(packet)) {
@@ -72,6 +115,16 @@ void loop() {
     } else {
       Serial.println("got an unexpected non-instruction");
     }
+  }
+
+  if (currentMillis - previousMillis > interval) {
+    if (on == true)
+      digitalWrite(LED_BUILTIN, LOW);
+    else
+      digitalWrite(LED_BUILTIN, HIGH);  
+    on = !on;
+    hum_temp_reading(device_address);
+    previousMillis = currentMillis;
   }
 }
 

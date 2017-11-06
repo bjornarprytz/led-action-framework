@@ -1,0 +1,3 @@
+This code should also be written for the Arduino to interface with the
+servos that control the dampers on the tank. It's meant to be used when
+circulating air in-between each measurement cycle

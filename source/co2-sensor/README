@@ -1,0 +1,7 @@
+As of 06.11.17, the code for the co2 sensor is made for the NUC (pc) to
+interface with the CO2 sensor via Serial communication on USB.
+
+python read-co2.py
+
+* I will write code for arduino to interface with the co2 sensor. At that
+point, it will be merged into the control.ino code

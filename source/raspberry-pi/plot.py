@@ -5,7 +5,7 @@ import json
 import datetime
 import os.path
 
-src_folder = "html/JSON/"
+src_folder = "JSON/"
 dst_folder = "static/assets/"
 week_fn = "weeks.json"
 days_fn = "days.json"

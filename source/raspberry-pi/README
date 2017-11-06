@@ -1,0 +1,45 @@
+By Bjornar Prytz
+
+
+SCRIPTS (for RaspberryPi)
+
+**** rpi_init.sh ****
+This script is meant to be run locally on the RaspberiPi. It starts the python
+scripts listener.py and server.py. It saves the output in respective .log
+files, which are overwritten each time rpi_init.sh is run.
+
+**** rpi_kill.sh ****
+Kills the processes started by rpi_init.sh.
+
+**** config.sh ****
+Contains information on the various devices that the scripts need to run.
+
+**** mapport.sh ****
+Maps a port on the localhost (NUC) to a port on the RaspberryPi (as yet,
+I haven't found a port to use besides 80).
+
+**** rpi_update.sh ****
+Copies this folder to the RaspberryPi with secure copy
+
+
+PYTHON
+
+**** list_ports.py ****
+lists all the "active" Serial Ports on the device.
+
+**** listener.py ****
+periodically requests stats from the Arduino, and updates the main
+.json file in the 'JSON/' folder.
+
+**** plot.py ****
+reads the main .json file and outputs aggregated data in json format to
+'static/assets/'.
+
+**** RPiserial.py ****
+Contains the communication protocol between Arduino and RaspberryPi
+across Serial. It specifies the packet format and functions for requesting
+the various data points.
+
+**** server.py ****
+Serves JSON files containing the logged data from the Arduino and its
+sensors.
