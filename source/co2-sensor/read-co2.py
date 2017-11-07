@@ -58,12 +58,14 @@ def read_response(serial, full=False):
     hdr_len = 3 # flag, address and length should always be present
     header = np.frombuffer(serial.read(hdr_len), dtype=np.uint8)
 
+    print header, header.size
+
     if header.size < hdr_len:
         return np.array([-1])
 
     # print "address: ", hex(header[1])
 
-    # print "header: ", header
+    print "header: ", hex(header)
 
     pl_len = header[-1] # Find out how many bytes the payload is
     if pl_len > 0:
@@ -74,7 +76,7 @@ def read_response(serial, full=False):
         return np.array([-1])
 
 
-    # print "payload: ", payload
+    print "payload: ", hex(payload)
 
     if full:
         response = np.concatenate((header, payload))

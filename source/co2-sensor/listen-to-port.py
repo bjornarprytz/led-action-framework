@@ -5,9 +5,9 @@ import serial
 ser = serial.Serial(
     port='/dev/ttyUSB0',
     baudrate=19200,
-    parity=serial.PARITY_ODD,
-    stopbits=serial.STOPBITS_TWO,
-    bytesize=serial.SEVENBITS
+    parity=serial.PARITY_NONE,
+    stopbits=serial.STOPBITS_ONE,
+    bytesize=serial.EIGHTBITS
 )
 
 ser.isOpen()
