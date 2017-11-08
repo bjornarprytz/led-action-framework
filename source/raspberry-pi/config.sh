@@ -3,6 +3,6 @@
 # Contains variables
 
 RPI_USERNAME="pi"
-RPI_IP="193.157.240.163"  # the ip address is especially SUSCEPTIBLE to CHANGE outside my control
-NUC_PORT="5000" # Python Flask server serves content on this port
-RPI_PORT="80"
+RPI_IP="193.157.162.253"  # the ip address is especially SUSCEPTIBLE to CHANGE outside my control
+NUC_PORT="7000" # Python Flask server serves content on this port
+RPI_PORT="5000"

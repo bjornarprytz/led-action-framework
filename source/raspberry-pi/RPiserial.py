@@ -71,6 +71,10 @@ class PlantEnvironmentControl:
             self.co2_ppm = self.receive_float()
 
     def log(self, path=src_folder+sensor_data_fn):
+        print self.temperature
+        print self.humidity
+        print self.co2_ppm
+
         now = datetime.datetime.now()
 
         # Fail-safe against rampant logging
@@ -155,6 +159,10 @@ class PlantEnvironmentControl:
 
         return f
 
+    # def receive_uint32(self):
+    #     response = self.serial.read()
+    #     print response
+    #     return np.uint32(ord(response))
 
     def receive_uint8(self):
         response = self.serial.read()
@@ -190,6 +198,6 @@ if __name__ == "__main__":
 
     handler = PlantEnvironmentControl()
     while True:
-        # key = raw_input(">>>")
+        key = raw_input(">>>")
 
         handler.control(key)
