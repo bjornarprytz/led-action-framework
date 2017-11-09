@@ -57,29 +57,30 @@ class PlantEnvironmentControl:
 
 
     def handle(self, response):
-        print "handling"
+        # print "handling"
         rsp_type = response >> 4 # Isolate the type bits of the response
 
         if rsp_type == RSP_TMP:
-            print "update temperature"
+            # print "update temperature"
             self.temperature = self.receive_float()
         if rsp_type == RSP_HUM:
-            print "update humidity"
+            # print "update humidity"
             self.humidity = self.receive_float()
         if rsp_type == RSP_CO2:
-            print "update co2 ppm"
+            # print "update co2 ppm"
             self.co2_ppm = self.receive_float()
 
     def log(self, path=src_folder+sensor_data_fn):
-        print self.temperature
-        print self.humidity
-        print self.co2_ppm
+        # print self.temperature
+        # print self.humidity
+        # print self.co2_ppm
 
         now = datetime.datetime.now()
 
         # Fail-safe against rampant logging
-        if now - self.last_log < datetime.timedelta(minutes=1):
+        if now - self.last_log < datetime.timedelta(seconds=30):
             return
+        self.last_log = now
 
         if os.path.isfile(path):
             data_file = open(path, 'r+w')
@@ -107,7 +108,7 @@ class PlantEnvironmentControl:
 
         data_file.close()
 
-        self.last_log = now
+
 
 
     def control(self, control):
@@ -173,7 +174,7 @@ class PlantEnvironmentControl:
 
     def request(self, type):
         packet = self.make_packet(INSTRUCTION, type)
-        print "packet", packet
+        # print "packet", packet
         self.send(packet)
 
     def update(self, types=[TEMPERATURE, HUMIDITY, CO2]):

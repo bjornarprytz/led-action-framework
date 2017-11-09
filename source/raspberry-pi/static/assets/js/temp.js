@@ -1,7 +1,7 @@
 let bar_composite_chart = new Chart ({
 	parent: "#chart-composite-1",
-	title: "Fireball/Bolide Events - Yearly (more than 5 reports)",
-	data: bar_composite_data,
+	title: "Week Overview",
+	data: week_composite,
 	type: 'bar',
 	height: 180,
 	is_navigable: 1,

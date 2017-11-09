@@ -23,5 +23,5 @@ if __name__ == "__main__":
 
         if now - last_plot >= datetime.timedelta(minutes=plot_interval):
             print "plotting: ", now
-            plot.make_plot()
+            plot.log_week()
             last_plot = datetime.datetime.now()
