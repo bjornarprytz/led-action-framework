@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Measurements from the last hour</title>
+  </head>
+
+  <div>
+    <a href="temp">Temperature</a>
+  </div>
+  <div>
+    <a href="hum">Humidity</a>
+  </div>
+  <div>
+    <a href="co2">Carbon Dioxide</a>
+  </div>
+  <div>
+    <a href="update">Update</a>
+  </div>
+
+  <body>
+
+
+
+        <div class="col-sm-10 push-sm-1 later" style="font-size: 14px;">
+          <div id="chart-composite-1" class="border"><svg height=225></svg></div>
+        </div>
+        <div class="col-sm-10 push-sm-1 later" style="font-size: 14px;">
+          <div id="co2-hour-chart" class="border"><svg height=225></svg></div>
+        </div>
+        <div class="col-sm-10 push-sm-1 later" style="font-size: 14px;">
+          <div id="temp-hour-chart" class="border"><svg height=225></svg></div>
+        </div>
+        <div class="col-sm-10 push-sm-1 later" style="font-size: 14px;">
+          <div id="hum-hour-chart" class="border"><svg height=225></svg></div>
+        </div>
+
+    <script src="assets/js/frappe-charts.min.js"></script>
+    <script src="assets/js/init.js"></script>
+    <script src="assets/js/last_hour.js"></script>
+  </body>
+</html>

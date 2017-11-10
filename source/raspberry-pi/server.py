@@ -30,6 +30,10 @@ def temp():
 def co2():
     return app.send_static_file("co2.html")
 
+@app.route('/last_hour')
+def last_hour():
+    return app.send_static_file("last_hour.html")
+
 @app.route('/weeks')
 def weeks():
     return app.send_static_file("assets/weeks.json")
@@ -45,6 +49,22 @@ def humidity():
 @app.route('/temperature')
 def temperature():
     return app.send_static_file("assets/temp_days.json")
+
+@app.route('/temp_hour')
+def temp_hour():
+    return app.send_static_file("assets/temp_H.json")
+
+@app.route('/hum_hour')
+def hum_hour():
+    return app.send_static_file("assets/hum_H.json")
+
+@app.route('/co2_hour')
+def co2_hour():
+    return app.send_static_file("assets/co2_H.json")
+
+@app.route('/recent')
+def recent():
+    return app.send_static_file("assets/recent.json")
 
 @app.route('/assets/js/<path:path>')
 def send_js(path):

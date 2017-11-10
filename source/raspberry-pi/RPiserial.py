@@ -3,15 +3,15 @@ import time
 import datetime
 import serial as s
 import numpy as np
-import json
+
+import sqlite3
+
 import os.path
 import glob
 import plot
 
-src_folder = "JSON/"
-sensor_data_fn = "sensor_data.json"
-
-# import threading as t
+src_folder = 'db/'
+sensor_data_fn = 'plantdb'
 
 # Communication between the RPi and Arduino are done in packets of 1 byte:
 # The first bit indicates whether the following 7 bits are an instruction
@@ -76,6 +76,8 @@ class PlantEnvironmentControl:
         # print self.co2_ppm
 
         now = datetime.datetime.now()
+
+        db = sqlite3.connect(path)
 
         # Fail-safe against rampant logging
         if now - self.last_log < datetime.timedelta(seconds=30):
