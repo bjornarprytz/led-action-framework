@@ -34,6 +34,10 @@ def co2():
 def last_hour():
     return app.send_static_file("last_hour.html")
 
+@app.route('/last_week')
+def last_week():
+    return app.send_static_file("last_week.html")
+
 @app.route('/weeks')
 def weeks():
     return app.send_static_file("assets/weeks.json")

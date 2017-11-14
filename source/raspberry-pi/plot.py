@@ -1,11 +1,15 @@
+#!/usr/bin/python
+
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 import matplotlib.dates as mdates
 import json
 import datetime
 import os.path
+import database
+from pprint import pprint
 
-src_folder = "JSON/"
+db_name = "plantdb"
 dst_folder = "static/assets/"
 week_fn = "weeks.json"
 days_fn = "days.json"
@@ -13,122 +17,153 @@ hour_fn = "H.json"
 recent_fn = "recent.json"
 params = ['temp', 'hum', 'co2']
 sensor_fn = "sensor_data.json"
+date_format = '%Y-%m-%d %H:%M:%S'
 
-def log_hours(day):
+def log_hours(experiment_id, num_hours=6, start=datetime.datetime.now()):
     '''
-    Return minute by minute readings from the last (12) hours
+    Return minute by minute readings from the last (6) hours (from now)
     '''
-    date = day.strftime("%d%m%y")
-    hours = day.hour+1
-    readings = {}
+
+    if (num_hours < 1):
+        print "must have at least 1 hour to log"
+
+    db = database.db(db_name)
+
+    readings = []
+    recent = []
+    for h in reversed(range(num_hours)):
+        hour = (start - datetime.timedelta(hours=h)).strftime('%Y-%m-%dT%H')
+        recent.append(hour[-2:]) # The contents of this list will be used for labels in presentation
+        # print r
+        readings.append(db.get_readings_hour(experiment_id, hour))
+    '''
+        readings= {
+            '%H' : [(0, temp, hum, co2) (1, temp, hum, co2), ... (59, temp, hum, co2)]
+            ... *num_hours
+        }
+    '''
+
+    json = {} # This will catalogue the readings by minutes, hours and parameter
     for param in params:
-        readings[param] = [{'values': [0] * 60}] * hours # List to store the data
+        json[param] = []
+        for h in range(num_hours):
+            json[param].append({'values': [0] * 60}) # List to store the data
 
-    recent = range(hours) # Make a list of the hours we are logging
+    for h in range(num_hours):
+        for r in readings[h]:
+            m = int(r[0][-2:])   # Minute
+            temp = r[1]     # Temperature
+            hum = r[2]      # Humidity
+            co2 = r[3]      # Carbon-Dioxide
 
-    sensor_path = src_folder + sensor_fn
+            json['temp'][h]['values'][m] = temp
+            json['hum'][h]['values'][m] = hum
+            json['co2'][h]['values'][m] = co2
 
-    if os.path.isfile(sensor_path):
-        sensor_data_file = open(sensor_path, 'r')
-        sensor_data_log = json.load(sensor_data_file)
-
-
-    hcount=0
-
-    if date in sensor_data_log.keys():
-        for hour in recent:
-            total = 0 # Note the magnitude of the readings
-            num = 0 # Keep track of the number of readings so that we can aggregate
-            m = 0 # Count the minutes
-            for r in sensor_data_log[date]: # For each record
-                t = r['time'] # Check the time stamp
-                h = datetime.datetime.strptime(t, "%H:%M").hour # Check if it's the right hour
-                if h == hour:
-                    m = datetime.datetime.strptime(t, "%H:%M").minute # and the minute
-                    for param in params:
-                        # print "found", h
-                        readings[param][h]['values'][m] = r[param] # Update readings each time
-                        # print "Reading:", readings[m], "hour:", h, "minute:", m
-    print len(sensor_data_log[date])
+    '''
+        JSON:
+        {
+            'param':[ ***hours***
+                        {'values' : [0,0,0,....,0]}, ***minutes***
+                        {'values' : [0,0,0,....,0]},
+                        ...
+                        {'values' : [0,0,0,....,0]}
+                    ]
+                    ...
+                    [
+                        'values'...
+                    ]
+            ...
+        }
+    '''
 
     for param in params:
         hour_path = dst_folder+param+"_"+hour_fn
-        write_json(hour_path, readings[param])
-
-    sensor_data_file.close()
+        write_json(hour_path, json[param])
 
     recent_path = dst_folder+recent_fn
     write_json(recent_path, recent)
-
-
 
 def write_json(path, to_write, perm='w'):
     fi = open(path, perm)
     fi.write(json.dumps(to_write))
     fi.close()
 
-def log_day(sensor_data_log, day, param):
-    date = day.strftime("%d%m%y")
+def log_days(experiment_id, num_days=7, start=datetime.datetime.now()):
+    if (num_days < 1):
+        print "must have at least 1 day to log"
 
-    if date in sensor_data_log.keys():
-        readings = []
-        for hour in range(24):
-            total = 0
-            num = 0
-            for r in sensor_data_log[date]:
-                t = r['time']
-                h = datetime.datetime.strptime(t, "%H:%M").hour
-                if h > hour:
-                    break
-                if h == hour:
-                    total += r[param]
-                    num += 1
-            if num > 0:
-                readings.append(total/num)
-            else:
-                readings.append(0)
-    else:
-        readings = [0]*24
-    return readings
+    db = database.db(db_name)
 
-def log_week():
-    today = datetime.datetime.today()
-
+    readings = []
     week = []
-    days = {}
+    for d in reversed(range(num_days)):
+        day = start - datetime.timedelta(days=d)
+        day_fmt = day.strftime('%Y-%m-%d')
+        week_day = day.strftime('%a')
+        week.append(week_day) # The contents of this list will be used for labels in presentation
+        readings.append(db.get_readings_day(experiment_id, day_fmt))
+
+    json = {} # This will catalogue the readings by hours days and parameter
     for param in params:
-        days[param] = []
+        json[param] = []
+        for d in range(num_days):
+            json[param].append({'values': [0] * 24})
 
-    sensor_path = src_folder + sensor_fn
+    for d in range(num_days):
+        for r in readings[d]:
+            h = int(r[0][-2:])   # Hour
+            temp = r[1]         # Temperature
+            hum = r[2]          # Humidity
+            co2 = r[3]          # Carbon-Dioxide
 
-    if os.path.isfile(sensor_path):
-        sensor_data_file = open(sensor_path, 'r')
-        sensor_data_log = json.load(sensor_data_file)
+            json['temp'][d]['values'][h] = temp
+            json['hum'][d]['values'][h] = hum
+            json['co2'][d]['values'][h] = co2
 
-    for i in reversed(range(7)): # Go backwards from today
-        day = today - datetime.timedelta(days=i)
-
-        # Collect the sensor data from this day
-        for param in params:
-            days[param].append(make_day(sensor_data_log, day, param))
-
-        # Add to the week
-        week.append(day.strftime("%a"))
-
-    sensor_data_file.close()
-
-    # Write the data to file
     for param in params:
         days_path = dst_folder+param+"_"+days_fn
-        days_data_log = days[param]
-        write_json(days_path, days_data_log)
+        write_json(days_path, json[param])
 
-    # Write the last 7 days to file
     week_path = dst_folder+week_fn
     write_json(week_path, week)
+
+
+# def log_week():
+#     today = datetime.datetime.today()
+#
+#     week = []
+#     days = {}
+#     for param in params:
+#         days[param] = []
+#
+#     sensor_path = src_folder + sensor_fn
+#
+#     if os.path.isfile(sensor_path):
+#         sensor_data_file = open(sensor_path, 'r')
+#         sensor_data_log = json.load(sensor_data_file)
+#
+#     for i in reversed(range(7)): # Go backwards from today
+#         day = today - datetime.timedelta(days=i)
+#
+#         # Collect the sensor data from this day
+#         for param in params:
+#             days[param].append(make_day(sensor_data_log, day, param))
+#
+#     sensor_data_file.close()
+#
+#     # Write the data to file
+#     for param in params:
+#         days_path = dst_folder+param+"_"+days_fn
+#         days_data_log = days[param]
+#         write_json(days_path, days_data_log)
+#
+#     # Write the last 7 days to file
+#     week_path = dst_folder+week_fn
+#     write_json(week_path, week)
 
 
 
 if __name__ == "__main__":
     # make_plot()
-    log_hours(datetime.datetime.now() - datetime.timedelta(days=2))
+    log_days(1)

@@ -4,14 +4,12 @@ import datetime
 import serial as s
 import numpy as np
 
-import sqlite3
-
 import os.path
 import glob
 import plot
+import database
 
-src_folder = 'db/'
-sensor_data_fn = 'plantdb'
+db_name = 'plantdb'
 
 # Communication between the RPi and Arduino are done in packets of 1 byte:
 # The first bit indicates whether the following 7 bits are an instruction
@@ -53,8 +51,8 @@ class PlantEnvironmentControl:
         self.humidity = 0
         self.co2_ppm = 0
 
-        self.last_log = datetime.datetime.now() - datetime.timedelta(minutes=15)
-
+        self.db = database.db(db_name)
+        self.db.init_db()
 
     def handle(self, response):
         # print "handling"
@@ -70,53 +68,23 @@ class PlantEnvironmentControl:
             # print "update co2 ppm"
             self.co2_ppm = self.receive_float()
 
-    def log(self, path=src_folder+sensor_data_fn):
-        # print self.temperature
-        # print self.humidity
-        # print self.co2_ppm
-
+    def log(self, experiment_id):
         now = datetime.datetime.now()
 
-        db = sqlite3.connect(path)
+        self.db.insert_readings((now, self.temperature, self.humidity, self.co2_ppm, experiment_id))
 
-        # Fail-safe against rampant logging
-        if now - self.last_log < datetime.timedelta(seconds=30):
-            return
-        self.last_log = now
-
-        if os.path.isfile(path):
-            data_file = open(path, 'r+w')
-            data_log = json.load(data_file)
-        else:
-            data_file = open(path, 'w+')
-            data_log = {}
-
-        entry = {
-        'time' : now.strftime("%H:%M"),
-        'temp' : self.temperature,
-        'hum' : self.humidity,
-        'co2' : self.co2_ppm
-        }
-
-        day = now.strftime("%d%m%y")
-
-        if day in data_log.keys():
-            data_log[day].append(entry)
-        else:
-            data_log[day] = [entry]
-
-        data_file.seek(0)
-        data_file.write(json.dumps(data_log))
-
-        data_file.close()
-
-
+        # entry = {
+        # 'time' : now.strftime("%H:%M"),
+        # 'temp' : self.temperature,
+        # 'hum' : self.humidity,
+        # 'co2' : self.co2_ppm
+        # }
 
 
     def control(self, control):
 
         if control == "0":
-            self.log()
+            self.log("test experiment")
         if control == "1":
             self.update([TEMPERATURE])
         if control == "2":
@@ -197,9 +165,10 @@ if __name__ == "__main__":
     update_interval = 10 # seconds
     log_interval = 60 # seconds
     plot_interval = 10 # minutes
-    last_plot = last_log = last_update = datetime.datetime.now()
+    now = datetime.datetime.now()
 
     handler = PlantEnvironmentControl()
+    handler.db.new_experiment("test experiment", now, '', '')
     while True:
         key = raw_input(">>>")
 
