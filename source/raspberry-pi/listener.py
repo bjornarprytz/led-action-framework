@@ -1,6 +1,7 @@
 import datetime
 import RPiserial
 import plot
+import time
 
 if __name__ == "__main__":
     update_interval = 10 # seconds
@@ -9,6 +10,7 @@ if __name__ == "__main__":
 
     handler = RPiserial.PlantEnvironmentControl()
     experiment_id = handler.db.new_experiment("test experiment", now, '', '')
+
     while True:
         now = datetime.datetime.now()
         if now - last_update >= datetime.timedelta(seconds=update_interval):
@@ -20,6 +22,8 @@ if __name__ == "__main__":
 
         if now - last_plot >= datetime.timedelta(minutes=plot_interval):
             print "plotting: ", now
-            plot.log_hours(experiment_id)
-            plot.log_days(experiment_id)
+            plot.log_hours(experiment_id, now)
+            plot.log_days(experiment_id, now)
             last_plot = datetime.datetime.now()
+
+        time.sleep(1) # not to take up too much CPU

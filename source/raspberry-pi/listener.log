@@ -1,0 +1,12 @@
+('sqlite error: ', 'UNIQUE constraint failed: experiments.title')
+updating(and logging):  2017-11-15 12:20:14.289377
+updating(and logging):  2017-11-15 12:20:24.343693
+updating(and logging):  2017-11-15 12:20:34.399838
+updating(and logging):  2017-11-15 12:20:44.454921
+updating(and logging):  2017-11-15 12:20:54.506950
+updating(and logging):  2017-11-15 12:21:04.561612
+plotting:  2017-11-15 12:21:04.561612
+Traceback (most recent call last):
+  File "listener.py", line 25, in <module>
+    plot.log_hours(experiment_id)
+TypeError: log_hours() takes at least 2 arguments (1 given)

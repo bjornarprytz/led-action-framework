@@ -19,7 +19,7 @@ params = ['temp', 'hum', 'co2']
 sensor_fn = "sensor_data.json"
 date_format = '%Y-%m-%d %H:%M:%S'
 
-def log_hours(experiment_id, num_hours=6, start=datetime.datetime.now()):
+def log_hours(experiment_id, start, num_hours=6):
     '''
     Return minute by minute readings from the last (6) hours (from now)
     '''
@@ -82,6 +82,7 @@ def log_hours(experiment_id, num_hours=6, start=datetime.datetime.now()):
         write_json(hour_path, json[param])
 
     recent_path = dst_folder+recent_fn
+    print 'writing',recent,'to',recent_path
     write_json(recent_path, recent)
 
 def write_json(path, to_write, perm='w'):
@@ -89,7 +90,7 @@ def write_json(path, to_write, perm='w'):
     fi.write(json.dumps(to_write))
     fi.close()
 
-def log_days(experiment_id, num_days=7, start=datetime.datetime.now()):
+def log_days(experiment_id, start, num_days=7):
     if (num_days < 1):
         print "must have at least 1 day to log"
 
@@ -128,42 +129,7 @@ def log_days(experiment_id, num_days=7, start=datetime.datetime.now()):
     week_path = dst_folder+week_fn
     write_json(week_path, week)
 
-
-# def log_week():
-#     today = datetime.datetime.today()
-#
-#     week = []
-#     days = {}
-#     for param in params:
-#         days[param] = []
-#
-#     sensor_path = src_folder + sensor_fn
-#
-#     if os.path.isfile(sensor_path):
-#         sensor_data_file = open(sensor_path, 'r')
-#         sensor_data_log = json.load(sensor_data_file)
-#
-#     for i in reversed(range(7)): # Go backwards from today
-#         day = today - datetime.timedelta(days=i)
-#
-#         # Collect the sensor data from this day
-#         for param in params:
-#             days[param].append(make_day(sensor_data_log, day, param))
-#
-#     sensor_data_file.close()
-#
-#     # Write the data to file
-#     for param in params:
-#         days_path = dst_folder+param+"_"+days_fn
-#         days_data_log = days[param]
-#         write_json(days_path, days_data_log)
-#
-#     # Write the last 7 days to file
-#     week_path = dst_folder+week_fn
-#     write_json(week_path, week)
-
-
-
 if __name__ == "__main__":
     # make_plot()
+    log_hours(1, datetime.datetime.now())
     log_days(1)

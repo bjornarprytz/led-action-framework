@@ -28,11 +28,11 @@ PYTHON
 lists all the "active" Serial Ports on the device.
 
 **** listener.py ****
-periodically requests stats from the Arduino, and updates the main
-.json file in the 'JSON/' folder.
+periodically requests stats from the Arduino, and updates the database in 'db/'.
+It also calls functions from plot.py
 
 **** plot.py ****
-reads the main .json file and outputs aggregated data in json format to
+queries the database outputs aggregated data in json format to
 'static/assets/'.
 
 **** RPiserial.py ****
