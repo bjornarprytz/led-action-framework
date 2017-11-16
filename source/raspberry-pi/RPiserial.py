@@ -15,11 +15,11 @@ db_name = 'plantdb'
 # The first bit indicates whether the following 7 bits are an instruction
 # or data following an instruction
 
-TYPE_MASK    = 0x80
-VALUE_MASK   = 0x7F
+TYPE_MASK    = 0x80 # 0b10000000
+VALUE_MASK   = 0x7F # 0b01111111
 
-INSTRUCTION  = 0x80
-VALUE        = 0x00
+INSTRUCTION  = 0x80 # 0b10000000
+VALUE        = 0x00 # 0b00000000
 
 TEMPERATURE  = 0x00 # 0b00000000
 HUMIDITY     = 0x01 # 0b00000001
@@ -37,7 +37,7 @@ RSP_CO2     = 0x8 # 0b1000
 class PlantEnvironmentControl:
     def __init__(self, serial_port='/dev/ttyACM0'):
 
-        self.serial = s.Serial(
+        self.arduino = s.Serial(
             port=serial_port,
             baudrate=9600,
             parity=s.PARITY_NONE,
@@ -45,7 +45,7 @@ class PlantEnvironmentControl:
             bytesize=s.EIGHTBITS,
             timeout=2
         )
-        self.serial.isOpen()
+        self.arduino.isOpen()
 
         self.temperature = 0
         self.humidity = 0
@@ -69,8 +69,8 @@ class PlantEnvironmentControl:
             self.co2_ppm = self.receive_float()
 
     def log(self, experiment_id):
-        now = datetime.datetime.now()
 
+        now = datetime.datetime.now()
         self.db.insert_readings((now, self.temperature, self.humidity, self.co2_ppm, experiment_id))
 
         # entry = {
@@ -82,7 +82,10 @@ class PlantEnvironmentControl:
 
 
     def control(self, control):
-
+        '''
+            This code is only used for unit testing. At the bottom of this file,
+            there's code that listens for user input to and sends it here.
+        '''
         if control == "0":
             self.log("test experiment")
         if control == "1":
@@ -104,62 +107,62 @@ class PlantEnvironmentControl:
 
 
 
-    def make_packet(self, type, value):
-        type &= TYPE_MASK
-        value &= VALUE_MASK # Clamp the value to 0-127
-        packet = np.array ([type | value], dtype=np.uint8)
+    def make_packet(self, t, v):
+        '''
+            Communication with the arduino is done in 1 byte packets.
+            The first bit is used to indicate instruction or data (t).
+
+            (v) is used to specify the instruction / data.
+        '''
+        t &= TYPE_MASK
+        v &= VALUE_MASK # Clamp the value to 0-127
+        packet = np.array ([t | v], dtype=np.uint8)
 
         return packet
 
     def receive_float(self):
-        # buf = np.array([0,0,0,0], np.uint8)
-        #
-        # for i in range(4):
-        #     buf[i] = self.receive_uint8()
-        #
-        # print np.int32(buf)
-        #
-        # f = 0x0
-        #
-        # for i in range(4):
-        #     f += buf[i] << 8*i
-        #
-        # print float(f)
-
-        f = float(self.serial.readline())
-
-        return f
-
-    # def receive_uint32(self):
-    #     response = self.serial.read()
-    #     print response
-    #     return np.uint32(ord(response))
+        rsp = float(self.arduino.readline())
+        return rsp
 
     def receive_uint8(self):
-        response = self.serial.read()
-        return np.uint8(ord(response))
+        '''
+            Receive 1 byte from the arduino. A request is required in order
+            to receive anything from the Arduino.
+        '''
+        rsp = np.uint8(ord(self.arduino.read()))
+        return rsp
 
     def send(self, packet):
-        self.serial.write(packet)
+        self.arduino.write(packet)
 
-    def request(self, type):
-        packet = self.make_packet(INSTRUCTION, type)
-        # print "packet", packet
+    def request(self, t):
+        '''
+
+        '''
+        packet = self.make_packet(INSTRUCTION, t)
         self.send(packet)
 
     def update(self, types=[TEMPERATURE, HUMIDITY, CO2]):
+        '''
+            Request (all) types of parameters from the Arduino. These are stored
+            in-memory on-board the Arduino.
+        '''
         for t in types:
-            self.request(t)
+            self.request(t) #
             response = self.receive_uint8()
             self.handle(response)
 
-
-
-    def command(self, type, value):
-        packet = self.make_packet(INSTRUCTION, type)
+    def command(self, t, v):
+        '''
+            Sends an instruction to change an actuator/LED via the Arduino
+            followed by which value to set.
+        '''
+        packet = self.make_packet(INSTRUCTION, t)
         self.send(packet)
-        payload = self.make_packet(VALUE, value)
+        payload = self.make_packet(VALUE, v)
         self.send(payload)
+
+        # TODO: Wait for ACK from arduino
 
 if __name__ == "__main__":
     update_interval = 10 # seconds

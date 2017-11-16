@@ -19,6 +19,7 @@ const char device_address = 0x28;
 
 const byte CONTROL_MASK = B10000000;
 
+// 7 bit instruction description
 const byte TEMPERATURE  = B0000000;
 const byte HUMIDITY     = B0000001;
 const byte CO2          = B0000010;
@@ -44,13 +45,12 @@ float co2_ppm = 0.0;
 unsigned long previousMillis = 0;
 unsigned long interval = 4000; // 4 seconds between each reading
 
-// For debugging:
+// For output:
 byte fan_speed = 0;
 byte servo_pos = 0;
 byte LED_red   = 0;
 byte LED_white = 0;
 byte LED_blue  = 0;
-bool on = false; // For on board LED
 
 
 void setup() {
@@ -60,7 +60,6 @@ void setup() {
 
   // for debug
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH);
 }
 
 void loop() {
@@ -73,6 +72,7 @@ void loop() {
     packet = Serial.read();
 
     if (is_instruction(packet)) {
+
       packet %= 0x80;             // Remove the instruction bit
       handle_instruction(packet); // and handle the instruction
 
@@ -82,18 +82,13 @@ void loop() {
   }
 
   if (currentMillis - previousMillis > interval) {
-    if (on == true)
-      digitalWrite(LED_BUILTIN, LOW);
-    else
-      digitalWrite(LED_BUILTIN, HIGH);
-    on = !on;
+    digitalWrite(LED_BUILTIN, HIGH);
+
     hum_temp_reading(device_address);
     CO2_reading(&T66_Serial, 2000);  // Spend at most 2 seconds here
     previousMillis = currentMillis;
 
-    //RPi_get_temperature();
-    //RPi_get_humidity();
-    //RPi_get_co2();
+    digitalWrite(LED_BUILTIN, LOW);
   }
 }
 
@@ -213,11 +208,6 @@ void RPi_send_float(byte type, float data) {
   String buf = String(data);
   Serial.write(type);
   Serial.println(buf);
-}
-
-void RPi_send_ulong(byte type, unsigned long data) {
-  Serial.write(type);
-  Serial.print(data);
 }
 
 void RPi_get_temperature() {
