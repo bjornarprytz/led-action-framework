@@ -19,7 +19,7 @@ params = ['temp', 'hum', 'co2']
 sensor_fn = "sensor_data.json"
 date_format = '%Y-%m-%d %H:%M:%S'
 
-def log_hours(experiment_id, start, num_hours=6):
+def log_hours(start, num_hours=6):
     '''
     Return minute by minute readings from the last (6) hours (from now)
     '''
@@ -35,7 +35,7 @@ def log_hours(experiment_id, start, num_hours=6):
         hour = (start - datetime.timedelta(hours=h)).strftime('%Y-%m-%dT%H')
         recent.append(hour[-2:]) # The contents of this list will be used for labels in presentation
         # print r
-        readings.append(db.get_readings_hour(experiment_id, hour))
+        readings.append(db.get_readings_hour(hour))
     '''
         readings= {
             '%H' : [(0, temp, hum, co2) (1, temp, hum, co2), ... (59, temp, hum, co2)]
@@ -82,7 +82,7 @@ def log_hours(experiment_id, start, num_hours=6):
         write_json(hour_path, json[param])
 
     recent_path = dst_folder+recent_fn
-    print 'writing',recent,'to',recent_path
+
     write_json(recent_path, recent)
 
 def write_json(path, to_write, perm='w'):
@@ -90,7 +90,7 @@ def write_json(path, to_write, perm='w'):
     fi.write(json.dumps(to_write))
     fi.close()
 
-def log_days(experiment_id, start, num_days=7):
+def log_days(start, num_days=7):
     if (num_days < 1):
         print "must have at least 1 day to log"
 
@@ -103,7 +103,7 @@ def log_days(experiment_id, start, num_days=7):
         day_fmt = day.strftime('%Y-%m-%d')
         week_day = day.strftime('%a')
         week.append(week_day) # The contents of this list will be used for labels in presentation
-        readings.append(db.get_readings_day(experiment_id, day_fmt))
+        readings.append(db.get_readings_day(day_fmt))
 
     json = {} # This will catalogue the readings by hours days and parameter
     for param in params:
@@ -131,5 +131,6 @@ def log_days(experiment_id, start, num_days=7):
 
 if __name__ == "__main__":
     # make_plot()
-    log_hours(1, datetime.datetime.now())
-    log_days(1)
+    now = datetime.datetime.now()
+    log_hours(now)
+    log_days(now)

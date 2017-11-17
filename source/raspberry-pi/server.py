@@ -1,6 +1,7 @@
 #!flask/bin/python
 from flask import Flask, jsonify, request, make_response, abort, send_from_directory
 
+import datetime
 import plot
 
 app = Flask(__name__, static_url_path='/static')
@@ -9,26 +10,16 @@ app = Flask(__name__, static_url_path='/static')
 def not_found(error):
     return make_response(jsonify({'error': 'Not found'}), 404)
 
-@app.route('/update')
-def update():
-    plot.make_week()
-    return app.send_static_file("index.html")
+# @app.route('/update')
+# def update():
+#     print 'updating'
+#     plot.log_hours(datetime.datetime.now())
+#     plot.log_days(datetime.datetime.now())
+#     return app.send_static_file("index.html")
 
 @app.route('/')
 def index():
     return app.send_static_file("index.html")
-
-@app.route('/hum')
-def hum():
-    return app.send_static_file("hum.html")
-
-@app.route('/temp')
-def temp():
-    return app.send_static_file("temp.html")
-
-@app.route('/co2')
-def co2():
-    return app.send_static_file("co2.html")
 
 @app.route('/last_hour')
 def last_hour():

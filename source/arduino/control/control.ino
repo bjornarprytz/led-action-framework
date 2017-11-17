@@ -3,7 +3,18 @@
 #include <Wire.h>           // I2C
 #include <SoftwareSerial.h> // Software-implemented Serial Communication
 
-// ********* Raspberry Pi *********
+// T6613 Telaire(CO2) Communication
+
+#define T66_BAUD 19200
+byte readCO2[] = {0xFF, 0XFE,2,2,3}; // Read co2 command
+
+// Virtual Serial Port where 12=Rx and 13=Tx
+SoftwareSerial T66_Serial(12,13);
+
+// Temperature/Humidity Communication
+const char device_address = 0x28;
+
+// Raspberry Pi Communication
 #define RPi_BAUD 9600
 
 const byte CONTROL_MASK = B10000000;
@@ -25,17 +36,6 @@ const byte BLUE = 2;
 float temperature = 0.0;
 float humidity = 0.0;
 float co2_ppm = 0.0;
-
-// ********* Sensors *********
-
-// T6613 Telaire(CO2) Communication
-
-#define T66_BAUD 19200
-byte readCO2[] = {0xFF, 0XFE,2,2,3}; // Read co2 command
-SoftwareSerial T66_Serial(12,13); // Virtual Serial Port where 12=Rx and 13=Tx
-
-// Temperature/Humidity Communication
-const char device_address = 0x28;
 
 // State Machine
 unsigned long previousMillis = 0;
@@ -88,10 +88,6 @@ void loop() {
   }
 }
 
-
-
-// T6613 Telaire(CO2) Communication -----------------------------------
-
 void CO2_reading(SoftwareSerial *com, unsigned long grace) {
   unsigned long start = millis();
 
@@ -135,9 +131,6 @@ bool T66_sendRequest(SoftwareSerial *com, byte request[], byte response[]) {
   return true;
 }
 
-
-// Temperature/Humidity Communication -----------------------------------
-
 void hum_temp_reading(char address) {
 // Wire Master Reader
 // by Nicholas Zambetti <http://www.zambetti.com>
@@ -163,8 +156,6 @@ void hum_temp_reading(char address) {
   temperature = (data[2] << 8 | (data[3] & 0xfc)) * (165.0 / 0xfffc) - 40;
 }
 
-
-// RaspberryPi Communication -----------------------------------
 
 bool RPi_wait_and_listen(unsigned int patience) {
   while (patience > 0) {
@@ -193,24 +184,15 @@ void handle_instruction(byte packet) {
     RPi_get_co2();
   } else if (packet == FAN_SPEED) {
     set_fan_speed();
-    RPi_send_ack(packet);
   } else if (packet == SERVOS) {
     set_servos();
-    RPi_send_ack(packet);
   } else if (packet == LED_RED) {
     set_LED(RED);
-    RPi_send_ack(packet);
   } else if (packet == LED_WHT) {
     set_LED(WHITE);
-    RPi_send_ack(packet);
   } else if (packet == LED_BLU) {
     set_LED(BLUE);
-    RPi_send_ack(packet);
   }
-}
-
-void RPi_send_ack(byte type) {
-  Serial.write(type);
 }
 
 void RPi_send_byte(byte type, byte data) {

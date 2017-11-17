@@ -14,8 +14,18 @@ class db:
                 title VARCHAR(20) UNIQUE,
                 description VARCHAR(64),
                 start DATETIME,
-                duration DATETIME,
-                normalization INTEGER
+                interval_length INTEGER
+                )
+            '''
+
+            intervals = '''
+                CREATE TABLE IF NOT EXISTS intervals
+                (id INTEGER PRIMARY KEY NOT NULL,
+                red_led INTEGER,
+                white_led INTEGER,
+                blue_led INTEGER,
+                experiment_id INTEGER NOT NULL,
+                FOREIGN KEY(experiment_id) REFERENCES experiments(id)
                 )
             '''
 
@@ -26,11 +36,12 @@ class db:
                 temperature REAL,
                 humidity REAL,
                 co2 REAL,
-                experiment_key INT NOT NULL,
-                FOREIGN KEY(experiment_key) REFERENCES experiments(id))
+                interval_id INT NOT NULL,
+                FOREIGN KEY(interval_id) REFERENCES intervals(id)
+                )
             '''
 
-            self.tables_init = [experiments, readings]
+            self.tables_init = [experiments, intervals, readings]
 
     def __init__(self, name):
         self._schema = self.schema()
@@ -44,20 +55,32 @@ class db:
         db.commit()
         db.close()
 
+    def new_interval(self, settings):
+        db = lite.connect(self.path)
+        c = db.cursor()
+
+        c.execute('INSERT INTO intervals(red_led, white_led, blue_led, experiment_id) VALUES (?,?,?,?)', settings)
+        interval_id = c.lastrowid
+
+        db.commit()
+        db.close()
+
+        return interval_id
+
     def insert_readings(self, records):
         '''
             records should be a list of tuples, on the form:
             [
-            (collect_time, temperature, humidity, co2, experiment_key),
-            (collect_time, temperature, humidity, co2, experiment_key),
+            (collect_time, temperature, humidity, co2, interval_id),
+            (collect_time, temperature, humidity, co2, interval_id),
             ...
-            (collect_time, temperature, humidity, co2, experiment_key)
+            (collect_time, temperature, humidity, co2, interval_id)
             ]
         '''
         db = lite.connect(self.path)
         c = db.cursor()
 
-        c.execute('INSERT INTO readings(collect_time, temperature, humidity, co2, experiment_key) VALUES (?,?,?,?,?)', records)
+        c.execute('INSERT INTO readings(collect_time, temperature, humidity, co2, interval_id) VALUES (?,?,?,?,?)', records)
 
         db.commit()
         db.close()
@@ -65,24 +88,24 @@ class db:
     def insert_reading(self, record):
         insert_readings([record])
 
-    def new_experiment(self, title, start_time, duration, normalization, description=''):
+    def new_experiment(self, title, start_time, interval_length, description=''):
         db = lite.connect(self.path)
         c = db.cursor()
 
-        values = (title, description, start_time, duration, normalization)
+        values = (title, description, start_time, interval_length)
 
         try:
-            c.execute('INSERT INTO experiments(title, description, start, duration, normalization) VALUES(?,?,?,?,?)', values)
-            experiment_key = c.lastrowid
+            c.execute('INSERT INTO experiments(title, description, start, interval_length) VALUES(?,?,?,?)', values)
+            experiment_id = c.lastrowid
         except lite.IntegrityError as e:
             print('sqlite error: ', e.args[0])
-            experiment_key = self.experiment_exists(title)
+            experiment_id = self.experiment_exists(title)
 
 
         db.commit()
         db.close()
 
-        return experiment_key
+        return experiment_id
 
     def get_readings(self, SQL, values):
         '''
@@ -98,32 +121,32 @@ class db:
 
         return readings
 
-    def get_readings_hour(self, experiment_key, hour):
+    def get_readings_hour(self, hour):
         '''
             returns an average of temperature, humidity and co2,
             over the given _hour_ grouped by minutes
         '''
-        values = (experiment_key,hour,)
+        values = (hour,)
 
         SQL =   '''
                 SELECT strftime('%H%M', collect_time), AVG(temperature), AVG(humidity), AVG(co2)
                 FROM readings
-                WHERE experiment_key=? AND strftime('%Y-%m-%dT%H', collect_time)=?
+                WHERE strftime('%Y-%m-%dT%H', collect_time)=?
                 GROUP BY strftime('%Y-%m-%dT%H:%M:00', collect_time)
                 '''
         return self.get_readings(SQL, values)
 
-    def get_readings_day(self, experiment_key, day):
+    def get_readings_day(self, day):
         '''
             returns an average of temperature, humidity and co2,
             over the given _day_, grouped by hours
         '''
-        values = (experiment_key,day,)
+        values = (day,)
 
         SQL =   '''
                 SELECT strftime('%Y-%m-%dT%H', collect_time), AVG(temperature), AVG(humidity), AVG(co2)
                 FROM readings
-                WHERE experiment_key=? AND strftime('%Y-%m-%d', collect_time)=?
+                WHERE strftime('%Y-%m-%d', collect_time)=?
                 GROUP BY strftime('%Y-%m-%dT%H:00:00', collect_time)
                 '''
 
