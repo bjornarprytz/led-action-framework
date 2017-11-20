@@ -5,7 +5,7 @@ import numpy as np
 # The first bit indicates whether the following 7 bits are an instruction
 # or data following an instruction
 
-TYPE_MASK    = 0x80 # 0b10000000
+FLAG_MASK    = 0x80 # 0b10000000
 VALUE_MASK   = 0x7F # 0b01111111
 
 INSTRUCTION  = 0x80 # 0b10000000
@@ -45,21 +45,25 @@ class Arduino:
 
         self.error = ''
 
-    def command(self, t, v):
+    def command(self, f, v):
         '''
             Sends an instruction to change an actuator/LED via the Arduino
             followed by which value to set.
         '''
-        packet = self.make_packet(INSTRUCTION, t)
+        packet = self.make_packet(INSTRUCTION, f)
         self.serial.write(packet)
         payload = self.make_packet(VALUE, v)
         self.serial.write(payload)
+        ack = self.receive_uint8()
+        if (ack == packet):
+            print "ACK received from Arduino"
+        else:
+            print "invalid ACK! mismatching packet and ack", hex(packet), hex(ack)
 
-        # TODO: Wait for ACK from arduino
 
     def request(self, t):
         '''
-            Makes a request for parameter t to the Arduino and waits for the response
+            Makes a request for parameter (t) to the Arduino and waits for the response
         '''
 
         packet = self.make_packet(INSTRUCTION, t)
@@ -80,22 +84,25 @@ class Arduino:
 
     def update(self, types=[TEMPERATURE, HUMIDITY, CO2]):
         '''
-            Request (all) types of parameters from the Arduino. These are stored
+            Request [all] (types) of parameters from the Arduino. These are stored
             in-memory on-board the Arduino.
         '''
         for t in types:
             self.request(t) #
 
-    def make_packet(self, t, v):
+    def make_packet(self, f, v):
         '''
             Communication with the arduino is done in 1 byte packets.
-            The first bit is used to indicate instruction or data (t).
+            The first bit is used to indicate instruction or data (f).
 
-            (v) is used to specify the instruction / data.
+            (v) is used to specify the type/value of instruction/data.
+
+            Packet:
+            1 byte: fvvvvvvv
         '''
-        t &= TYPE_MASK
+        f &= FLAG_MASK  # Mask out the 8th (most significant) bit.
         v &= VALUE_MASK # Clamp the value to 0-127
-        packet = np.array ([t | v], dtype=np.uint8)
+        packet = np.array ([f | v], dtype=np.uint8)
 
         return packet
 

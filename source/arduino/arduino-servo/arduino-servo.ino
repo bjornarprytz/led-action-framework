@@ -1,0 +1,116 @@
+#include <SoftwareSerial.h>
+
+#define SERVO_PIN     14
+#define LEFT_OPEN     0x1FF
+#define LEFT_CLOSED   0x32F
+#define RIGHT_OPEN    0x1FF
+#define RIGHT_CLOSED  0x0CA
+#define SPEED         0x0FF
+
+SoftwareSerial DamperServos(11,10); // Virtual Serial Port, where 11=Rx and 10=Tx. Only use 10 because 1 way comms
+
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(9600);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
+  DamperServos.begin(9600);
+}
+
+bool done = false;
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  delay(1000);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(1000);
+  digitalWrite(LED_BUILTIN, HIGH);
+  blink_led(&DamperServos, 254);
+  if (!done) {
+    open_dampers(&DamperServos, 1, 2);
+    done = true;
+  } else {
+    close_dampers(&DamperServos, 1, 2);
+    done =false;
+  }
+}
+
+void addChecksumAndLength(byte *buf, byte len)
+{
+    // adding length
+    buf[3] = len - 4;
+
+    byte tmp;
+    // finding sum
+    byte checksum = 0;
+    for (int i=2;i<len-1; i++) {
+      tmp = buf[i];
+      if (tmp < 0)
+        tmp = tmp + 256;
+      checksum += tmp;
+    }
+    // inverting bits
+    checksum = ~checksum;
+    // int2byte
+    checksum = checksum & 255;
+
+    // adding checkSum
+    buf[len-1] = checksum;
+}
+
+void setReg1(SoftwareSerial *com, byte addr, byte regNo, byte val)
+{
+  byte buf[] = {0xFF, 0xFF, 0, 0, 0x3, 0, 0, 0};
+
+  buf[2] = addr;
+  buf[5] = regNo;
+  buf[6] = val;
+
+  addChecksumAndLength((char*)&buf, sizeof(buf)/sizeof(buf[0]));
+
+  com->write(buf, sizeof(buf));
+}
+
+void setReg2(SoftwareSerial *com, byte addr, byte regNoLSB, int val)
+{
+  byte buf[] = {0xFF, 0xFF, 0, 0, 0x3, 0, 0, 0, 0};
+  
+  buf[2] = addr;
+  buf[5] = regNoLSB;
+  buf[6] = ( val & 255 );
+  buf[7] = (val >> 8) & 255;
+  
+  addChecksumAndLength((char*)&buf, sizeof(buf)/sizeof(buf[0]));
+  
+  com->write(buf, sizeof(buf));
+}
+void open_dampers(SoftwareSerial *com, byte addr_left, byte addr_right)
+{
+  setReg2(com, addr_left, 0x20, SPEED);
+  setReg2(com, addr_left, 0x1E, LEFT_OPEN);
+
+  setReg2(com, addr_right, 0x20, SPEED);
+  setReg2(com, addr_right, 0x1E, RIGHT_OPEN);
+}
+
+void close_dampers(SoftwareSerial *com, byte addr_left, byte addr_right)
+{
+  setReg2(com, addr_left, 0x20, SPEED);
+  setReg2(com, addr_left, 0x1E, LEFT_CLOSED);
+
+  setReg2(com, addr_right, 0x20, SPEED);
+  setReg2(com, addr_right, 0x1E, RIGHT_CLOSED);
+}
+
+void blink_led(SoftwareSerial *com, byte addr)
+{
+  
+  setReg1(com, addr, 0x19, 1);
+  delay(1000);
+  setReg1(com, addr, 0x19, 0);
+}
+
+
+
+
+

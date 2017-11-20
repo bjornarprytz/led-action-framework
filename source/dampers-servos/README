@@ -1,3 +1,13 @@
+**** servo-config.py ****
+Configure a single dynamixel servo by prompt. 
+set:
+address
+orientation (left or right)
+return status
+baud rate (9600)
+
+Can also be used to test connection by blinking on-servo LED
+
 This code should also be written for the Arduino to interface with the
 servos that control the dampers on the tank. It's meant to be used when
 circulating air in-between each measurement cycle
