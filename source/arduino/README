@@ -1,3 +1,7 @@
 Arduino routines are organized into folders with a .ino file within.
 Open a .ino in the Arduino IDE and upload it to an Arduino connected to your
 computer via USB.
+
+
+**** libraries/ ****
+A collection of (ad hoc) libraries to abastract away the communication with the different components

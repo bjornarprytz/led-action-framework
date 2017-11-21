@@ -6,7 +6,7 @@ import os.path
 import glob
 import plot
 import database
-import arduinoPi
+from arduinoPi import *
 
 db_name = 'plantdb'
 
@@ -15,7 +15,7 @@ db_name = 'plantdb'
 class PlantEnvironmentControl:
     def __init__(self, arduino_port='/dev/ttyACM0'):
 
-        self.arduino = arduinoPi.Arduino(arduino_port)
+        self.arduino = Arduino(arduino_port)
         self.db = database.db(db_name)
         self.db.init_db()
 
@@ -35,10 +35,12 @@ class PlantEnvironmentControl:
             self.log("test experiment")
         if control == "1":
             self.arduino.update()
-        if control == "4":
+        if control == "2":
             self.arduino.command(FAN_SPEED, 0x50)
-        if control == "5":
-            self.arduino.command(SERVOS, 0x10)
+        if control == "3":
+            self.arduino.command(SERVOS, DAMPERS_CLOSED)
+        if control == "4":
+            self.arduino.command(SERVOS, DAMPERS_OPEN)
         if control == "6":
             self.arduino.command(LED_RED, 0x15)
         if control == "7":

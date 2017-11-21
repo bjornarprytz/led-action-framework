@@ -5,20 +5,23 @@ import numpy as np
 # The first bit indicates whether the following 7 bits are an instruction
 # or data following an instruction
 
-FLAG_MASK    = 0x80 # 0b10000000
-VALUE_MASK   = 0x7F # 0b01111111
+FLAG_MASK       = 0x80 # 0b10000000
+VALUE_MASK      = 0x7F # 0b01111111
 
-INSTRUCTION  = 0x80 # 0b10000000
-VALUE        = 0x00 # 0b00000000
+INSTRUCTION     = 0x80 # 0b10000000
+VALUE           = 0x00 # 0b00000000
 
-TEMPERATURE  = 0x00 # 0b00000000
-HUMIDITY     = 0x01 # 0b00000001
-CO2          = 0x02 # 0b00000010
-FAN_SPEED    = 0x03 # 0b00000011
-SERVOS       = 0x04 # 0b00000100
-LED_RED      = 0x05 # 0b00000101
-LED_WHT      = 0x06 # 0b00000110
-LED_BLU      = 0x07 # 0b00000111
+TEMPERATURE     = 0x00 # 0b00000000
+HUMIDITY        = 0x01 # 0b00000001
+CO2             = 0x02 # 0b00000010
+FAN_SPEED       = 0x03 # 0b00000011
+SERVOS          = 0x04 # 0b00000100
+LED_RED         = 0x05 # 0b00000101
+LED_WHT         = 0x06 # 0b00000110
+LED_BLU         = 0x07 # 0b00000111
+
+DAMPERS_CLOSED  = 2
+DAMPERS_OPEN    = 1
 
 # RSP_TMP     = 0x0 # 0b0000
 # RSP_HUM     = 0x4 # 0b0100
@@ -34,7 +37,7 @@ class Arduino:
             parity=s.PARITY_NONE,
             stopbits=s.STOPBITS_ONE,
             bytesize=s.EIGHTBITS,
-            timeout=2
+            timeout=5
         )
 
         self.serial.isOpen()
@@ -88,7 +91,9 @@ class Arduino:
             in-memory on-board the Arduino.
         '''
         for t in types:
-            self.request(t) #
+            self.request(t)
+
+        print self.temperature, self.humidity, self.co2_ppm
 
     def make_packet(self, f, v):
         '''

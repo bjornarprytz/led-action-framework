@@ -1,42 +1,5 @@
-#include <SoftwareSerial.h>
-
-#define SERVO_Rx      11  // Not used, but necessary for the SoftwareSerial interface
-#define SERVO_Tx      10
-#define SERVO_BAUD    9600
-#define LEFT_OPEN     0x1FF
-#define LEFT_CLOSED   0x32F
-#define RIGHT_OPEN    0x1FF
-#define RIGHT_CLOSED  0x0CA
-#define SPEED         0x0FF
-
-
-SoftwareSerial DamperServos(11,10); // Virtual Serial Port, where 11=Rx and 10=Tx. Only use 10 because 1 way comms
-
-void setup() {
-  // put your setup code here, to run once:
-  Serial.begin(9600);
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, HIGH);
-  DamperServos.begin(SERVO_BAUD);
-}
-
-bool done = false;
-
-void loop() {
-  // put your main code here, to run repeatedly:
-  delay(1000);
-  digitalWrite(LED_BUILTIN, LOW);
-  delay(1000);
-  digitalWrite(LED_BUILTIN, HIGH);
-  blink_led(&DamperServos, 254);
-  if (!done) {
-    open_dampers(&DamperServos, 1, 2);
-    done = true;
-  } else {
-    close_dampers(&DamperServos, 1, 2);
-    done =false;
-  }
-}
+#include "Arduino.h"
+#include "ServoControl.h"
 
 void addChecksumAndLength(byte *buf, byte len)
 {
@@ -89,6 +52,8 @@ void setReg2(SoftwareSerial *com, byte addr, byte regNoLSB, int val)
 }
 void open_dampers(SoftwareSerial *com, byte addr_left, byte addr_right)
 {
+  com->listen();
+
   setReg2(com, addr_left, 0x20, SPEED);
   setReg2(com, addr_left, 0x1E, LEFT_OPEN);
 
@@ -98,6 +63,8 @@ void open_dampers(SoftwareSerial *com, byte addr_left, byte addr_right)
 
 void close_dampers(SoftwareSerial *com, byte addr_left, byte addr_right)
 {
+  com->listen();
+
   setReg2(com, addr_left, 0x20, SPEED);
   setReg2(com, addr_left, 0x1E, LEFT_CLOSED);
 
@@ -107,6 +74,7 @@ void close_dampers(SoftwareSerial *com, byte addr_left, byte addr_right)
 
 void blink_led(SoftwareSerial *com, byte addr)
 {
+  com->listen();
 
   setReg1(com, addr, 0x19, 1);
   delay(1000);
