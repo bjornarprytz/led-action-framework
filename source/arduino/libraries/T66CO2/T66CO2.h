@@ -9,9 +9,12 @@
 #define T66_1_Rx 12
 #define T66_1_Tx 13
 
+// Top level function that tries the sensor for [grace] amount of milliseconds
 float CO2_reading(SoftwareSerial *com, unsigned long grace);
-unsigned long T66_getValue(byte packet[]);
+// Sends a request over the SoftwareSerial interface and stores the response in the input buffer
 bool T66_sendRequest(SoftwareSerial *com, byte request[], byte response[]);
+// Extracts the CO2 ppm from the input packet.
+unsigned long T66_getValue(byte packet[]);
 
 
 #endif

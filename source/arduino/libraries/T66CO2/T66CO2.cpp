@@ -10,7 +10,7 @@ float CO2_reading(SoftwareSerial *com, unsigned long grace) {
   while (!T66_sendRequest(com, readCO2, response)) {
     if (millis() - start > grace)
       return;
-    delay(450);
+      delay(30); // Avoid flooding the Sensor with requests
   }
   return (float)T66_getValue(response);
 }
@@ -39,7 +39,7 @@ bool T66_sendRequest(SoftwareSerial *com, byte request[], byte response[]) {
         com->read();                 // - flush it
       return false; //exit and try again
     }
-  delay(50);
+  delay(30);
   }
   for (int i=0; i < 5; i++)
     response[i] = com->read();

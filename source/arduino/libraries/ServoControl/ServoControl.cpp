@@ -54,22 +54,22 @@ void open_dampers(SoftwareSerial *com, byte addr_left, byte addr_right)
 {
   com->listen();
 
-  setReg2(com, addr_left, 0x20, SPEED);
-  setReg2(com, addr_left, 0x1E, LEFT_OPEN);
+  setReg2(com, addr_left, SPEED_REG_ADDR, SPEED);
+  setReg2(com, addr_left, POS_REG_ADDR, LEFT_OPEN);
 
-  setReg2(com, addr_right, 0x20, SPEED);
-  setReg2(com, addr_right, 0x1E, RIGHT_OPEN);
+  setReg2(com, addr_right, SPEED_REG_ADDR, SPEED);
+  setReg2(com, addr_right, POS_REG_ADDR, RIGHT_OPEN);
 }
 
 void close_dampers(SoftwareSerial *com, byte addr_left, byte addr_right)
 {
   com->listen();
 
-  setReg2(com, addr_left, 0x20, SPEED);
-  setReg2(com, addr_left, 0x1E, LEFT_CLOSED);
+  setReg2(com, addr_left, SPEED_REG_ADDR, SPEED);
+  setReg2(com, addr_left, POS_REG_ADDR, LEFT_CLOSED);
 
-  setReg2(com, addr_right, 0x20, SPEED);
-  setReg2(com, addr_right, 0x1E, RIGHT_CLOSED);
+  setReg2(com, addr_right, SPEED_REG_ADDR, SPEED);
+  setReg2(com, addr_right, POS_REG_ADDR, RIGHT_CLOSED);
 }
 
 void blink_led(SoftwareSerial *com, byte addr)

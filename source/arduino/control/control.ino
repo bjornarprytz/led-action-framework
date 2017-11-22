@@ -5,11 +5,21 @@
 #include "T66CO2.h"         // CO2 sensor Communication
 #include "HumTemp.h"        // Hum/Temp sensor Communication
 
+
+
+/*
+ *  **Important note on the SoftwareSerial library**
+ *  Not all pins on the Mega and Mega 2560 support change interrupts,
+ *  so only the following can be used for RX:
+ *  10, 11, 12, 13, 50, 51, 52, 53, 62, 63, 64, 65, 66, 67, 68, 69
+ */
+
 // Virtual Serial Port
 SoftwareSerial T66_Serial(T66_1_Rx, T66_1_Tx);
 
 // Servo Communication
 SoftwareSerial DamperServos(SERVO_Rx, SERVO_Tx);
+
 
 // Raspberry Pi Communication
 #define RPi_BAUD 9600
@@ -27,6 +37,9 @@ const byte LED_RED      = B0000101;
 const byte LED_WHT      = B0000110;
 const byte LED_BLU      = B0000111;
 
+const byte DAMPERS_CLOSED  = 0;
+const byte DAMPERS_OPEN    = 1;
+
 const byte RED = 0;
 const byte WHITE = 1;
 const byte BLUE = 2;
@@ -41,7 +54,7 @@ byte LED_blue  = 0;
 
 // State Machine
 unsigned long previousMillis = 0;
-unsigned long interval = 4000; // 4 seconds between each reading
+unsigned long interval = 2000; // 2 seconds between each reading
 
 void setup() {
   Serial.begin(RPi_BAUD);         // With Raspberry Pi
@@ -72,11 +85,10 @@ void loop() {
 
   if (currentMillis - previousMillis > interval) {
     digitalWrite(LED_BUILTIN, HIGH);
-
     hum_temp_reading(HUM_TEMP_ADDRESS, (char*)&h_t_rsp);
     humidity = get_hum_from_reading((char*)&h_t_rsp);
     temperature = get_temp_from_reading((char*)&h_t_rsp);
-    co2_ppm = CO2_reading(&T66_Serial, 2000);  // Spend at most 2 seconds here
+    co2_ppm = CO2_reading(&T66_Serial, interval/2);  // Spend at most half an interval here
     previousMillis = currentMillis;
 
     digitalWrite(LED_BUILTIN, LOW);
@@ -84,7 +96,6 @@ void loop() {
 }
 
 void handle_instruction(byte packet) {
-  byte sig;
   if (packet == TEMPERATURE) {
     RPi_get_temperature();
   } else if (packet == HUMIDITY) {
@@ -94,10 +105,10 @@ void handle_instruction(byte packet) {
   } else if (packet == FAN_SPEED) {
     set_fan_speed();
   } else if (packet == SERVOS) {
-    sig = set_servos();
-    if (sig == 1) open_dampers(&DamperServos, LEFT_ADDR, RIGHT_ADDR);
-    else close_dampers(&DamperServos, LEFT_ADDR, RIGHT_ADDR);
-    send_ack(packet);
+    if (set_servos())
+      send_ack(packet);
+    else
+      send_error(packet);
   } else if (packet == LED_RED) {
     set_LED(RED);
   } else if (packet == LED_WHT) {
@@ -119,7 +130,12 @@ bool RPi_wait_and_listen(unsigned int patience) {
 
 void send_ack(byte packet)
 {
-  Serial.write(packet | CONTROL_MASK);
+  Serial.write(packet | CONTROL_MASK); // Rebuild the instruction packet to signify success
+}
+
+void send_error(byte packet)
+{
+  Serial.write(packet & VALUE_MASK); // Mask out the control bit to signify an error
 }
 
 bool is_instruction(byte packet) {
@@ -164,13 +180,17 @@ void set_fan_speed() {
   }
 }
 
-byte set_servos() {
-  byte packet;
+bool set_servos() {
+  byte sig; // Signal from the Raspberry Pi. 0: close dampers, 1: open dampers
 
   if (RPi_wait_and_listen(10)) { // Wait 1 second for follow-up data
-    packet = Serial.read();
-    return packet;
+    sig = Serial.read() & VALUE_MASK;
+    if (sig == DAMPERS_OPEN) open_dampers(&DamperServos, LEFT_ADDR, RIGHT_ADDR);
+    else if (sig == DAMPERS_CLOSED) close_dampers(&DamperServos, LEFT_ADDR, RIGHT_ADDR);
+    else return false;
+    return true;
   }
+  return false;
 }
 
 void set_LED(byte color) {

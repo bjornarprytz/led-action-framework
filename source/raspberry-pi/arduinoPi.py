@@ -20,13 +20,8 @@ LED_RED         = 0x05 # 0b00000101
 LED_WHT         = 0x06 # 0b00000110
 LED_BLU         = 0x07 # 0b00000111
 
-DAMPERS_CLOSED  = 2
+DAMPERS_CLOSED  = 0
 DAMPERS_OPEN    = 1
-
-# RSP_TMP     = 0x0 # 0b0000
-# RSP_HUM     = 0x4 # 0b0100
-# RSP_CO2     = 0x8 # 0b1000
-
 
 class Arduino:
     def __init__(self, serial_port):
@@ -64,16 +59,22 @@ class Arduino:
             print "invalid ACK! mismatching packet and ack", hex(packet), hex(ack)
 
 
-    def request(self, t):
+    def request(self, t, retries=3):
         '''
-            Makes a request for parameter (t) to the Arduino and waits for the response
+            Makes a request for parameter (t) to the Arduino and waits for the response.
+            Will retry (3 times) if it receives a valid error from the Arduino
         '''
+        if retries <= 0:
+            return
 
         packet = self.make_packet(INSTRUCTION, t)
         self.serial.write(packet)
         response = self.receive_uint8()
 
-        if t == response:
+        ack = t
+        err = t & VALUE_MASK
+
+        if response == ack:
             value = self.receive_float()
 
             if t == CO2:
@@ -82,8 +83,10 @@ class Arduino:
                 self.humidity = value
             elif t == TEMPERATURE:
                 self.temperature = value
+        elif response == err:
+            request(t, retries-1)
         else:
-            self.error = 'mismatching type and response ('+t+', '+response+')'
+            self.error = 'response neither ACK, nor ERROR ('+t+', '+response+')'
 
     def update(self, types=[TEMPERATURE, HUMIDITY, CO2]):
         '''
