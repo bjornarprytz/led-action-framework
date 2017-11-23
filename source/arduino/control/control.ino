@@ -56,28 +56,44 @@ byte LED_blue  = 0;
 unsigned long previousMillis = 0;
 unsigned long interval = 2000; // 2 seconds between each reading
 
+// Fan Test
+// int FAN_PIN = 2;
+// byte fan_speed = 0;
+// unsigned long prevFanMillis = 0;
+// unsigned long fanInterval = 1000;
+
 void setup() {
   Serial.begin(RPi_BAUD);         // With Raspberry Pi
   hum_temp_init();               // join i2c bus (address optional for master)
   T66_Serial.begin(T66_BAUD);     // Opens virtual serial port with the CO2 Sensor
   DamperServos.begin(SERVO_BAUD);
   // for debug
-  pinMode(LED_BUILTIN, OUTPUT);
+  // pinMode(LED_BUILTIN, OUTPUT);
+  //
+  // pinMode(FAN_PIN, OUTPUT);
+
 }
 
 void loop() {
   byte packet = 0;
   unsigned long currentMillis = millis();
   byte h_t_rsp[TEMP_HUM_RSP_SIZE]; // To hold
+  // analogWrite(FAN_PIN, fan_speed);
+  // if (currentMillis - prevFanMillis > fanInterval) {
+  //   analogWrite(FAN_PIN, fan_speed);
+  //   Serial.println(fan_speed);
+  //   fan_speed += 0x10;
+  //   if (fan_speed > 255)
+  //     fan_speed = 0;
+  //   prevFanMillis = millis();
+  // }
 
   if (Serial.available() > 0) {
     packet = Serial.read();
 
     if (is_instruction(packet)) {
-
       packet %= 0x80;             // Remove the instruction bit
       handle_instruction(packet); // and handle the instruction
-
     } else {
       Serial.println("got an unexpected non-instruction");
     }
@@ -118,12 +134,12 @@ void handle_instruction(byte packet) {
   }
 }
 
-bool RPi_wait_and_listen(unsigned int patience) {
-  while (patience > 0) {
+bool RPi_wait_and_listen(unsigned int timeout) {
+  while (timeout > 0) {
     if (Serial.available() > 0)
       return true;
     delay(100);
-    patience -= 1;
+    timeout -= 1;
   }
   return false;
 }

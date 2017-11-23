@@ -15,11 +15,11 @@ Kills the processes started by rpi_init.sh.
 Contains information on the various devices that the scripts need to run.
 
 **** mapport.sh ****
-Maps a port on the localhost (NUC) to a port on the RaspberryPi (as yet,
-I haven't found a port to use besides 80).
+Maps a port on the localhost (NUC) to a port on the RaspberryPi which server.py
+can post to.
 
 **** rpi_update.sh ****
-Copies this folder to the RaspberryPi with secure copy
+Copies the necessary files from this folder to the RaspberryPi with secure copy
 
 
 PYTHON
@@ -35,11 +35,15 @@ It also calls functions from plot.py
 queries the database outputs aggregated data in json format to
 'static/assets/'.
 
-**** RPiserial.py ****
+**** arduinoPi.py ****
 Contains the communication protocol between Arduino and RaspberryPi
 across Serial. It specifies the packet format and functions for requesting
 the various data points.
 
+**** RPicontrol.py ****
+Handles the interface between the Arduino and the database. Uses arduinoPi.py to
+as an API for the sensor data.
+
 **** server.py ****
-Serves JSON files containing the logged data from the Arduino and its
-sensors.
+Serves HTML which presents JSON files containing the logged data from the Arduino
+and its sensors.

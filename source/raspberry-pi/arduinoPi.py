@@ -1,5 +1,6 @@
 import serial as s
 import numpy as np
+import datetime
 
 # Communication between the RPi and Arduino are done in packets of 1 byte:
 # The first bit indicates whether the following 7 bits are an instruction
@@ -25,7 +26,9 @@ DAMPERS_OPEN    = 1
 
 class Arduino:
     def __init__(self, serial_port):
-
+        '''
+            Initialise an interface with an Arduino.
+        '''
         self.serial = s.Serial(
             port=serial_port,
             baudrate=9600,
@@ -37,9 +40,11 @@ class Arduino:
 
         self.serial.isOpen()
 
+        self.time_stamp = 0
         self.temperature = 0
         self.humidity = 0
         self.co2_ppm = 0
+
 
         self.error = ''
 
@@ -91,12 +96,11 @@ class Arduino:
     def update(self, types=[TEMPERATURE, HUMIDITY, CO2]):
         '''
             Request [all] (types) of parameters from the Arduino. These are stored
-            in-memory on-board the Arduino.
+            in-memory on-board the Arduino. Mark the reading with a timestamp.
         '''
         for t in types:
             self.request(t)
-
-        print self.temperature, self.humidity, self.co2_ppm
+        self.time_stamp = datetime.datetime.now()
 
     def make_packet(self, f, v):
         '''
@@ -115,13 +119,15 @@ class Arduino:
         return packet
 
     def receive_float(self):
+        '''
+            Expects to receive 4 bytes from the arduino.
+        '''
         rsp = float(self.serial.readline())
         return rsp
 
     def receive_uint8(self):
         '''
-            Receive 1 byte from the arduino. A request must be made before the
-            the Arduino will send anything back.
+            Receive 1 byte from the arduino.
         '''
         rsp = np.uint8(ord(self.serial.read()))
         return rsp

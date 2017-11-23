@@ -1,30 +1,40 @@
 #!/bin/python
 import time
-import datetime
-
-import os.path
-import glob
-import plot
 import database
-from arduinoPi import *
+from arduinoPi import * # imports datetime
 
 db_name = 'plantdb'
 
-
-
 class PlantEnvironmentControl:
     def __init__(self, arduino_port='/dev/ttyACM0'):
-
+        '''
+            Initialise the Arduino interface, and connect to a database to store
+            the readings
+        '''
         self.arduino = Arduino(arduino_port)
         self.db = database.db(db_name)
         self.db.init_db()
+        self.db_up_to_date = False
 
-    def log(self, experiment_id):
-        now = datetime.datetime.now()
-        self.db.insert_readings((now, self.arduino.temperature, self.arduino.humidity, self.arduino.co2_ppm, experiment_id))
+    def log(self, interval_id):
+        '''
+            The readings are catalogued by interval id. This function inserts
+            the latest reading from the Arduino into the database
+        '''
+        if self.db_up_to_date:
+            print "database already has this reading logged"
+            return
+        self.db.insert_readings((self.arduino.time_stamp, self.arduino.temperature, self.arduino.humidity, self.arduino.co2_ppm, interval_id))
+
+        self.db_up_to_date = True
 
     def update(self):
+        '''
+            Requests a status  update from the Arduino.
+        '''
+
         self.arduino.update()
+        self.db_up_to_date = False
 
     def control(self, control):
         '''
@@ -34,7 +44,7 @@ class PlantEnvironmentControl:
         if control == "0":
             self.log("test experiment")
         if control == "1":
-            self.arduino.update()
+            self.update()
         if control == "2":
             self.arduino.command(FAN_SPEED, 0x50)
         if control == "3":
