@@ -5,6 +5,7 @@
 #include "T66CO2.h"         // CO2 sensor Communication
 #include "HumTemp.h"        // Hum/Temp sensor Communication
 
+#include <PWM.h>            // For changing the frequency of a pin
 
 
 /*
@@ -57,20 +58,25 @@ unsigned long previousMillis = 0;
 unsigned long interval = 2000; // 2 seconds between each reading
 
 // Fan Test
-// int FAN_PIN = 2;
-// byte fan_speed = 0;
-// unsigned long prevFanMillis = 0;
-// unsigned long fanInterval = 1000;
+ uint8_t FAN_PIN = 8;
+ int32_t FAN_PWM_FREQUENCY = 25000;
+ byte fan_speed = 0x7F;
+ unsigned long prevFanMillis = 0xFF;
+ unsigned long fanInterval = 8000;
 
 void setup() {
   Serial.begin(RPi_BAUD);         // With Raspberry Pi
-  hum_temp_init();               // join i2c bus (address optional for master)
+  hum_temp_init();                // join i2c bus (address optional for master)
   T66_Serial.begin(T66_BAUD);     // Opens virtual serial port with the CO2 Sensor
   DamperServos.begin(SERVO_BAUD);
   // for debug
-  // pinMode(LED_BUILTIN, OUTPUT);
-  //
-  // pinMode(FAN_PIN, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  pinMode(FAN_PIN, OUTPUT);
+
+//  InitTimersSafe();
+//  if (SetPinFrequencySafe(FAN_PIN, FAN_PWM_FREQUENCY))
+//    Serial.println(GetPinResolution(FAN_PIN));
 
 }
 
@@ -78,15 +84,16 @@ void loop() {
   byte packet = 0;
   unsigned long currentMillis = millis();
   byte h_t_rsp[TEMP_HUM_RSP_SIZE]; // To hold
-  // analogWrite(FAN_PIN, fan_speed);
+   //analogWrite(FAN_PIN, fan_speed);
   // if (currentMillis - prevFanMillis > fanInterval) {
-  //   analogWrite(FAN_PIN, fan_speed);
-  //   Serial.println(fan_speed);
-  //   fan_speed += 0x10;
-  //   if (fan_speed > 255)
-  //     fan_speed = 0;
-  //   prevFanMillis = millis();
-  // }
+//     analogWrite(FAN_PIN, fan_speed);
+//     if (fan_speed == 0xFF) {
+//        fan_speed = 0xF0;
+//     } else {
+//      fan_speed = 0xFF;
+//     }
+//     prevFanMillis = millis();
+//   }
 
   if (Serial.available() > 0) {
     packet = Serial.read();
@@ -119,7 +126,10 @@ void handle_instruction(byte packet) {
   } else if (packet == CO2) {
     RPi_get_co2();
   } else if (packet == FAN_SPEED) {
-    set_fan_speed();
+    if (set_fan_speed())
+      send_ack(packet);
+    else
+      send_error(packet);
   } else if (packet == SERVOS) {
     if (set_servos())
       send_ack(packet);
@@ -142,6 +152,13 @@ bool RPi_wait_and_listen(unsigned int timeout) {
     timeout -= 1;
   }
   return false;
+}
+
+byte get_data(byte packet)
+{
+  // Because the most significant bit is used for control, we can reach a larger range
+  // by omitting the least significant bit instead.
+  return packet << 1;  
 }
 
 void send_ack(byte packet)
@@ -185,15 +202,17 @@ void RPi_get_co2() {
   RPi_send_float(CO2, co2_ppm);
 }
 
-void set_fan_speed() {
+bool set_fan_speed() {
   byte packet;
 
   if (RPi_wait_and_listen(10)) { // Wait 1 second for follow-up data
     packet = Serial.read();
     if (is_data(packet)) {
-      ; // TODO: signal actuator
+      analogWrite(FAN_PIN, get_data(packet));
+      return true;
     }
   }
+  return false;
 }
 
 bool set_servos() {

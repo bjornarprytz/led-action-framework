@@ -46,7 +46,15 @@ class PlantEnvironmentControl:
         if control == "1":
             self.update()
         if control == "2":
-            self.arduino.command(FAN_SPEED, 0x50)
+            speed = int(raw_input("Input Speed (0-255)"))
+            if speed > 255:
+                speed = 255
+            if speed <= 128:
+                speed = speed >> 1
+            if speed < 0:
+                speed = 0
+            print speed
+            self.arduino.command(FAN_SPEED, speed)
         if control == "3":
             self.arduino.command(SERVOS, DAMPERS_CLOSED)
         if control == "4":
