@@ -9,7 +9,7 @@ class PlantEnvironmentControl:
     def __init__(self, arduino_port='/dev/ttyACM0'):
         '''
             Initialise the Arduino interface, and connect to a database to store
-            the readings
+            the readings.
         '''
         self.arduino = Arduino(arduino_port)
         self.db = database.db(db_name)
@@ -47,13 +47,7 @@ class PlantEnvironmentControl:
             self.update()
         if control == "2":
             speed = int(raw_input("Input Speed (0-255)"))
-            if speed > 255:
-                speed = 255
-            if speed <= 128:
-                speed = speed >> 1
-            if speed < 0:
-                speed = 0
-            print speed
+            speed = max(0, min(speed, 255)) >> 1 # Clamp Speed and compress it slightly (right shift 1)
             self.arduino.command(FAN_SPEED, speed)
         if control == "3":
             self.arduino.command(SERVOS, DAMPERS_CLOSED)
