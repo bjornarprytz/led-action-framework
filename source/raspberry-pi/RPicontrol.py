@@ -24,6 +24,8 @@ class PlantEnvironmentControl:
         if self.db_up_to_date:
             print "database already has this reading logged"
             return
+
+        print self.arduino.time_stamp, self.arduino.temperature, self.arduino.humidity, self.arduino.co2_ppm    
         self.db.insert_readings((self.arduino.time_stamp, self.arduino.temperature, self.arduino.humidity, self.arduino.co2_ppm, interval_id))
 
         self.db_up_to_date = True
@@ -46,19 +48,24 @@ class PlantEnvironmentControl:
         if control == "1":
             self.update()
         if control == "2":
-            speed = int(raw_input("Input Speed (0-255)"))
-            speed = max(0, min(speed, 255)) >> 1 # Clamp Speed and compress it slightly (right shift 1)
-            self.arduino.command(FAN_SPEED, speed)
+            speed = int(raw_input("Internal FAN Speed (0-255)"))
+            speed = self.clamp(speed, 0, 255) # Clamp Speed and compress it slightly (right shift 1)
+            self.arduino.command(FAN_SPEED, [speed])
         if control == "3":
-            self.arduino.command(SERVOS, DAMPERS_CLOSED)
+            self.arduino.command(SERVOS, [DAMPERS_CLOSED])
         if control == "4":
-            self.arduino.command(SERVOS, DAMPERS_OPEN)
-        if control == "6":
-            self.arduino.command(LED_RED, 0x15)
-        if control == "7":
-            self.arduino.command(LED_WHT, 0x58)
-        if control == "8":
-            self.arduino.command(LED_BLU, 0x42)
+            self.arduino.command(SERVOS, [DAMPERS_OPEN])
+        if control == "5":
+            red = int(raw_input("red: (0-255)"))
+            red = self.clamp(red, 0, 255)
+            white = int(raw_input("white: (0-255)"))
+            white = self.clamp(white, 0, 255)
+            blue = int(raw_input("blue: (0-255)")) % 0x100
+            blue = self.clamp(blue, 0, 255)
+            self.arduino.command(LED, [red, white, blue])
+
+    def clamp(self, val, mn, mx):
+        return max(mn, min(val, mx))
 
 if __name__ == "__main__":
     update_interval = 10 # seconds

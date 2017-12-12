@@ -5,8 +5,6 @@
 #include <SoftwareSerial.h>
 
 // Servo Settings
-#define SERVO_Rx        11  // Not used, but necessary for the SoftwareSerial interface
-#define SERVO_Tx        10  // Communication with servos is master->slave only
 #define SERVO_BAUD      9600
 #define LEFT_ADDR       1
 #define RIGHT_ADDR      2

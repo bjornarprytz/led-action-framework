@@ -3,6 +3,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import random as rand
+import math
 import time
 from quantum_yield import *
 
@@ -18,15 +19,39 @@ class Individual:
     An Individual with a set of three weights (a, b, c) as the genotype.
     """
     def __init__(self, w, r, b, weights={'a' : 1.0, 'b' : 1.0, 'c' : 1.0}):
+        # w, r and b are arrays representing the documented
+        # maximum output profiles for each channel.
         self.w = w
         self.r = r
         self.b = b
 
         self.weights = weights.copy()
 
-        self.fitness = INFINITY
+        self.cost = INFINITY
 
         self.resolution = LED_RESOLUTION
+
+        self._temperature = 1.0     # higher temperature -> more exploration. Diminishes each iteration.
+        self._min_temp = 0.00001    # When to stop annealing
+        self._alpha = 0.90          # Change in temperature between each iteration
+
+    def cost_func(self, action_spectrum):
+        """
+            --Cost Function--
+            Evaluate the input PAR values and return the cost (lower is better)
+
+            action_spectrum are arrays of equal size, representing the LED output
+            and the action spectrum of the plant across a range of wavelengths.
+        """
+
+        # TODO: Take energy consumption into account
+
+        diff = action_spectrum - self.get_PAR_output()
+
+        cost = np.sum(np.sqrt(diff**2))
+
+        return cost
+
 
     def random_start(self):
         for key in self.weights.keys():
@@ -34,40 +59,90 @@ class Individual:
             self.weights[key] = float(rand.randint(0,LED_RESOLUTION)) / float(LED_RESOLUTION)
 
 
-    def get_fitness(self):
-        return self.fitness
+    def get_cost(self):
+        return self.cost
 
-    def get_PAR_output(self, a=-1, b=-1, c=-1):
-        if a == -1:
-            a = self.weights['a']
-        if b == -1:
-            b = self.weights['b']
-        if c == -1:
-            c = self.weights['c']
+    def get_PAR_output(self):
+        '''
+            Calculate the PAR output from the LED array according to the current
+            settings on each channel.
+        '''
+        a = self.weights['a']
+        b = self.weights['b']
+        c = self.weights['c']
 
         return (self.w * a) + (self.r * b) + (self.b * c)
 
     def print_stats(self):
-        print (self.w, self.r, self.b, self.fitness)
+        print (self.w, self.r, self.b, self.cost)
 
-    def probe(self, key, step, plant_response):
+    def neighbour(self, channel=None):
+        '''
+            Generate a random neighbour by changing the weight of one channel.
+            If channel is None, randomize the choice of channel.
+        '''
+
+        if channel == None:
+            channel = rand.choice(self.weights.keys())
+
+        new_weights = self.weights.copy()
+
+        new_weights[channel] = rand.random() # Randomize the weight [0-1]
+
+        new_individual = Individual(self.w, self.r, self.b, new_weights)
+
+        return new_individual
+
+    def acceptance_probability(self, old_cost, new_cost):
+        ap = math.exp((old_cost - new_cost) / self._temperature)
+
+        return ap
+
+    def anneal(self, action_spectrum):
+        '''
+            Based on http://katrinaeg.com/simulated-annealing.html
+
+            Simulated annealing for an input number of iterations. If
+            iterations is 0, it will run until temperature reaches min_temp
+        '''
+        old_cost = self.cost_func(action_spectrum)
+
+        best_setting = self
+
+        tries_per_temp = 10
+
+        while self._temperature > self._min_temp:
+            for i in range(tries_per_temp):
+                new_setting = best_setting.neighbour() # Generate a random neighbour
+                new_cost = new_setting.cost_func(action_spectrum) # Evaluate the new solution
+                ap = self.acceptance_probability(old_cost, new_cost)
+
+                if ap > rand.random():
+                    best_setting = new_setting
+                    old_cost = new_cost
+
+            self._temperature *= self._alpha
+
+        return best_setting
+
+    def probe(self, channel, step, action_spectrum):
         weights = self.weights.copy()
 
-        weights[key] += step
-        if (weights[key] > 1):
-            weights[key] = 1.0
+        weights[channel] += step
+        if (weights[channel] > 1):
+            weights[channel] = 1.0
 
         up = Individual(self.w, self.r, self.b, weights)
-        fitness_up = up.eval(up.get_PAR_output(), plant_response)
+        cost_up = up.cost_func(action_spectrum)
 
-        weights[key] -= (step*2)
-        if (weights[key] < 0):
-            weights[key] = 0.0
+        weights[channel] -= (step*2)
+        if (weights[channel] < 0):
+            weights[channel] = 0.0
         down = Individual(self.w, self.r, self.b, weights)
-        fitness_down = down.eval(down.get_PAR_output(), plant_response)
+        cost_down = down.cost_func(action_spectrum)
 
-        # lower fitness is better
-        if fitness_up < fitness_down:
+        # lower cost is better
+        if cost_up < cost_down:
             return up
         else:
             return down
@@ -84,24 +159,24 @@ class Individual:
         self.resolution = res
 
 
-    def local_search(self, plant_response):
+    def local_search(self, action_spectrum):
         """
         Try changing the weights a, b and c one by one, in both directions, and evaluate them to see which
         neighbour is the most promising.
         """
 
         best_individual = self
-        best_fitness = self.fitness
+        lowest_cost = self.cost
         step = float(1.0 / self.resolution)
 
         new_best = False
 
         for key in self.weights.keys():
-             individual = self.probe(key, step, plant_response)
-             fitness = individual.eval(individual.get_PAR_output(), plant_response)
-             if fitness < best_fitness:
+             individual = self.probe(key, step, action_spectrum)
+             cost = individual.cost_func(action_spectrum)
+             if cost < lowest_cost:
                  new_best = True
-                 best_fitness = fitness
+                 lowest_cost = cost
                  best_individual = individual
 
         if new_best:
@@ -112,23 +187,7 @@ class Individual:
 
 
 
-        self.fitness = self.eval(self.get_PAR_output(), plant_response)
-
-
-
-
-    def eval(self, PAR, plant_response):
-        """
-        Evaluate the input PAR values and return the fitness (lower is better)
-        """
-        diff = plant_response - PAR
-
-        fitness = np.sum(np.sqrt(diff**2))
-
-        # print("fitness: ", fitness)
-
-        return fitness
-
+        self.cost = self.cost_func(action_spectrum)
 
 
 if __name__ == "__main__":
@@ -163,10 +222,11 @@ if __name__ == "__main__":
     plant_profile = ax.plot(spectrum_range, pr, color='green', label='Plant PAR-profile')
     LED_response, = ax.plot([], [], '-k', color='black', label='LED output')
     LED_response2, = ax.plot([], [], '-k', color='grey', label='LED output2')
+    Annealing_result, = ax.plot([], [], '-k', color='pink', label='Annealing')
     ax.legend()
 
-    for i in range(1000):
-        time.sleep(1)
+    for i in range(100):
+        # time.sleep(0.25)
         test.local_search(pr)
         LED_response.set_ydata(test.get_PAR_output())
         LED_response.set_xdata(spectrum_range)
@@ -178,6 +238,22 @@ if __name__ == "__main__":
         ax.relim()
         ax.axis([spectrum_range[0], spectrum_range[-1], 0, 2])
         plt.draw()
+
+    anneal_test = Individual(w,r,b)
+    an_res = anneal_test.anneal(pr)
+
+    Annealing_result.set_ydata(an_res.get_PAR_output())
+    Annealing_result.set_xdata(spectrum_range)
+
+    ax.relim()
+    ax.axis([spectrum_range[0], spectrum_range[-1], 0, 2])
+
+    print an_res.cost_func(pr)
+    print test.cost_func(pr)
+
+    while True:
+        plt.draw()
+
 
 
     plt.show()

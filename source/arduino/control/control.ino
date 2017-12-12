@@ -7,6 +7,14 @@
 
 #include <PWM.h>            // For changing the frequency of a pin
 
+#define SERVO_Rx_PIN        11  // Not used, but necessary for the SoftwareSerial interface
+#define SERVO_Tx_PIN        10  // Communication with servos is master->slave only
+#define T66_1_Rx_PIN        12
+#define T66_1_Tx_PIN        13
+#define LED_RED_PIN         5
+#define LED_WHT_PIN         6
+#define LED_BLU_PIN         7
+#define FAN_INT_PIN         8   // Internal fans
 
 /*
  *  **Important note on the SoftwareSerial library**
@@ -16,10 +24,11 @@
  */
 
 // Virtual Serial Port
-SoftwareSerial T66_Serial(T66_1_Rx, T66_1_Tx);
+SoftwareSerial T66_Serial(T66_1_Rx_PIN, T66_1_Tx_PIN);
 
 // Servo Communication
-SoftwareSerial DamperServos(SERVO_Rx, SERVO_Tx);
+
+SoftwareSerial DamperServos(SERVO_Rx_PIN, SERVO_Tx_PIN);
 
 
 // Raspberry Pi Communication
@@ -58,11 +67,8 @@ unsigned long previousMillis = 0;
 unsigned long interval = 2000; // 2 seconds between each reading
 
 // Fan Test
- uint8_t FAN_PIN = 8;
- int32_t FAN_PWM_FREQUENCY = 25000;
- byte fan_speed = 0x7F;
- unsigned long prevFanMillis = 0xFF;
- unsigned long fanInterval = 8000;
+unsigned long prevLEDMillis = 0;
+unsigned long LEDInterval = 5000;
 
 void setup() {
   Serial.begin(RPi_BAUD);         // With Raspberry Pi
@@ -72,28 +78,33 @@ void setup() {
   // for debug
   pinMode(LED_BUILTIN, OUTPUT);
 
-  pinMode(FAN_PIN, OUTPUT);
-
-//  InitTimersSafe();
-//  if (SetPinFrequencySafe(FAN_PIN, FAN_PWM_FREQUENCY))
-//    Serial.println(GetPinResolution(FAN_PIN));
-
+  pinMode(LED_RED_PIN, OUTPUT);
+  pinMode(LED_WHT_PIN, OUTPUT);
+  pinMode(LED_BLU_PIN, OUTPUT);
+  pinMode(FAN_INT_PIN, OUTPUT);
 }
+
+byte red = 0;
+byte wht = 0;
+byte blu = 0;
 
 void loop() {
   byte packet = 0;
   unsigned long currentMillis = millis();
   byte h_t_rsp[TEMP_HUM_RSP_SIZE]; // To hold
-   //analogWrite(FAN_PIN, fan_speed);
-  // if (currentMillis - prevFanMillis > fanInterval) {
-//     analogWrite(FAN_PIN, fan_speed);
-//     if (fan_speed == 0xFF) {
-//        fan_speed = 0xF0;
-//     } else {
-//      fan_speed = 0xFF;
-//     }
-//     prevFanMillis = millis();
-//   }
+  
+  
+  if (currentMillis - prevLEDMillis > LEDInterval) {
+    analogWrite(LED_RED_PIN, red);
+    analogWrite(LED_WHT_PIN, wht);
+    analogWrite(LED_BLU_PIN, blu);
+    
+    prevLEDMillis = millis();
+
+    red = (red + 0x10) % 0x100;
+    blu = red*2 % 0x100;
+    wht = blu*2 % 0x100;
+  }
 
   if (Serial.available() > 0) {
     packet = Serial.read();
@@ -208,7 +219,7 @@ bool set_fan_speed() {
   if (RPi_wait_and_listen(10)) { // Wait 1 second for follow-up data
     packet = Serial.read();
     if (is_data(packet)) {
-      analogWrite(FAN_PIN, get_data(packet));
+      analogWrite(FAN_INT_PIN, get_data(packet));
       return true;
     }
   }

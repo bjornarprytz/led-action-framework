@@ -6,8 +6,6 @@
 
 // T6613 Telaire(CO2) Communication
 #define T66_BAUD 19200
-#define T66_1_Rx 12
-#define T66_1_Tx 13
 
 // Top level function that tries the sensor for [grace] amount of milliseconds
 float CO2_reading(SoftwareSerial *com, unsigned long grace);

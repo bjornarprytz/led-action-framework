@@ -6,20 +6,16 @@ import datetime
 # The first bit indicates whether the following 7 bits are an instruction
 # or data following an instruction
 
-FLAG_MASK       = 0x80 # 0b10000000
-VALUE_MASK      = 0x7F # 0b01111111
-
-INSTRUCTION     = 0x80 # 0b10000000
-VALUE           = 0x00 # 0b00000000
+CONTROL_MASK    = 0b11110000
+HANDSHAKE_FLAG  = 0b10100000
+SIZE_MASK       = 0x0F # 0b00001111
 
 TEMPERATURE     = 0x00 # 0b00000000
 HUMIDITY        = 0x01 # 0b00000001
 CO2             = 0x02 # 0b00000010
 FAN_SPEED       = 0x03 # 0b00000011
 SERVOS          = 0x04 # 0b00000100
-LED_RED         = 0x05 # 0b00000101
-LED_WHT         = 0x06 # 0b00000110
-LED_BLU         = 0x07 # 0b00000111
+LED             = 0x05 # 0b00000101
 
 DAMPERS_CLOSED  = 0
 DAMPERS_OPEN    = 1
@@ -48,20 +44,23 @@ class Arduino:
 
         self.error = ''
 
-    def command(self, f, v):
+    def command(self, t, v):
         '''
             Sends an instruction to change an actuator/LED via the Arduino
             followed by which value to set.
         '''
-        packet = self.make_packet(INSTRUCTION, f)
-        self.serial.write(packet)
-        payload = self.make_packet(VALUE, v)
-        self.serial.write(payload)
-        ack = self.receive_uint8()
-        if (ack == packet):
+        print v
+        com = self.make_command(t, v)
+        print "sending command:", com
+        self.serial.write(com)
+        ack = t
+        err = ~t
+
+        response = self.receive_uint8()
+        if (response == ack):
             print "ACK received from Arduino"
         else:
-            print "invalid ACK! mismatching packet and ack", hex(packet), hex(ack)
+            print "invalid ACK! mismatching response and ack", hex(response), hex(ack)
 
 
     def request(self, t, retries=3):
@@ -72,12 +71,13 @@ class Arduino:
         if retries <= 0:
             return
 
-        packet = self.make_packet(INSTRUCTION, t)
-        self.serial.write(packet)
+        req = self.make_request(t)
+        print "sending request:", req
+        self.serial.write(req)
         response = self.receive_uint8()
 
         ack = t
-        err = t & VALUE_MASK
+        err = ~t
 
         if response == ack:
             value = self.receive_float()
@@ -102,21 +102,48 @@ class Arduino:
             self.request(t)
         self.time_stamp = datetime.datetime.now()
 
-    def make_packet(self, f, v):
+    def make_command(self, t, v):
         '''
-            Communication with the arduino is done in 1 byte packets.
-            The first bit is used to indicate instruction or data (f).
+        Command:
+            Header:     ccccssss
+            Payload:    tttttttt, vvvvvvvv, ...
 
-            (v) is used to specify the type/value of instruction/data.
-
-            Packet:
-            1 byte: fvvvvvvv
+            (c) is used to indicate a header byte (1111xxxx)
+            (s) is used to specify the size of the payload.
+            (t) is the instruction
+            (v) value can be anything, and has to be specified by the Arduino Code
         '''
-        f &= FLAG_MASK  # Mask out the 8th (most significant) bit.
-        v &= VALUE_MASK # Clamp the value to 0-127
-        packet = np.array ([f | v], dtype=np.uint8)
 
-        return packet
+        size = len(v) + 1;
+        if size > 0x0F:
+            print "invalid size:", size
+            return
+
+
+
+
+        header = np.array ([HANDSHAKE_FLAG | size], dtype=np.uint8)
+        payload = np.array ([t] + v, dtype=np.uint8)
+
+        return np.concatenate((header, payload))
+
+    def make_request(self, t):
+        '''
+        Request:
+            Header:     ccccssss
+            Payload:    tttttttt
+
+            (c) is used to indicate a header byte (1111xxxx)
+            (s) is used to specify the size of the payload.
+            (t) is the instruction and specifies what is being requested
+        '''
+
+        size = 0x01; # Requests only contain the instruction type (size: 1 byte)
+
+        header = np.array ([HANDSHAKE_FLAG | size], dtype=np.uint8)
+        payload = np.array ([t], dtype=np.uint8)
+
+        return np.concatenate((header, payload))
 
     def receive_float(self):
         '''
