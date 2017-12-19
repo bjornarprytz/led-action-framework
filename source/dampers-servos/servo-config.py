@@ -216,6 +216,8 @@ def test_dampers(ser):
             open_dampers(ser, 1, 2)
         elif key == 'close':
             close_dampers(ser, 1, 2)
+        elif key == 'blink':
+            blink_LED(ser, 254)
         elif key == 'quit':
             break
 

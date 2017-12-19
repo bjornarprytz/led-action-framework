@@ -2,7 +2,8 @@
 #include "HumTemp.h"
 
 void hum_temp_init() {
-  Wire.begin();
+
+  Wire.begin(); // join i2c bus (address optional for master)
 }
 
 void hum_temp_reading(char address, byte *buf) {

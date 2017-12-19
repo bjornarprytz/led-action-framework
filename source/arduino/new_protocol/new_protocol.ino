@@ -5,8 +5,6 @@
 #include "T66CO2.h"         // CO2 sensor Communication
 #include "HumTemp.h"        // Hum/Temp sensor Communication
 
-#include <PWM.h>            // For changing the frequency of a pin
-
 #define LED_RED_PIN         5
 #define LED_WHT_PIN         6
 #define LED_BLU_PIN         7
@@ -29,7 +27,6 @@
 SoftwareSerial T66_Serial(T66_1_Rx_PIN, T66_1_Tx_PIN);
 
 // Servo Communication
-
 SoftwareSerial DamperServos(SERVO_Rx_PIN, SERVO_Tx_PIN);
 
 
@@ -37,18 +34,19 @@ SoftwareSerial DamperServos(SERVO_Rx_PIN, SERVO_Tx_PIN);
 #define RPi_BAUD 9600
 
 // Handshake masks
-const byte CONTROL_MASK = 0xF0; // 1110xxxx indicates a handshake byte
+const byte CONTROL_MASK = 0xF0; // 1010xxxx indicates a handshake byte
 const byte SIZE_MASK    = 0x0F; // xxxx1111 contains the number of bytes following the header
 
-const byte HANDSHAKE_FLAG = 0B10100000;
+const byte HEADER_FLAG  = 0B10100000;
 
 // instruction description
 const byte TEMPERATURE  = 0x00;
 const byte HUMIDITY     = 0x01;
 const byte CO2          = 0x02;
-const byte FAN_SPEED    = 0x03;
-const byte SERVOS       = 0x04;
-const byte LED          = 0x05;
+const byte FAN_INT      = 0x03;
+const byte FAN_EXT      = 0x04;
+const byte SERVOS       = 0x05;
+const byte LED          = 0x06;
 
 
 const byte DAMPERS_CLOSED  = 0;
@@ -76,13 +74,15 @@ unsigned long prevLEDMillis = 0;
 unsigned long LEDInterval = 5000;
 
 void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
+  
   Serial.begin(RPi_BAUD);         // With Raspberry Pi
-  hum_temp_init();                // join i2c bus (address optional for master)
+  hum_temp_init();                
   T66_Serial.begin(T66_BAUD);     // Opens virtual serial port with the CO2 Sensor
   DamperServos.begin(SERVO_BAUD);
+  
   // for debug
-  pinMode(LED_BUILTIN, OUTPUT);
-
   digitalWrite(LED_BUILTIN, LOW);
   analogWrite(FAN_INT_PIN, 0);
   analogWrite(FAN_EXT_PIN, 0);
@@ -114,42 +114,33 @@ void update_data(unsigned long currentMillis) {
 
 
 void listen_for_handshake() {
-  unsigned int s = 0;
   byte header = 0;
-  byte instruction = 0;
-  byte* payload;
 
   if (Serial.available() > 0) {
-    
-    header = Serial.read();
-    s = validate_and_get_size(header);
-    if (s > 0) {
-      
-      instruction = Serial.read();
-
-      s--;                                         // Account for the instruction byte
-      payload = (byte*)malloc(sizeof(byte)*s);     // Allocate a buffer for the payload
-      
-      Serial.readBytes(payload, s);                // Fill the buffer
-      
-      handle_instruction(instruction, payload, s); // handle the instruction
-
-      free(payload);                               // Free up the memory used by the payload buffer
-    }
+    header = Serial.read();    
+    validate_and_handle_msg(header);
   }
-  
-  
 }
 
 void handle_instruction(byte instruction, byte* payload, unsigned int s) {
+  
   if (instruction == TEMPERATURE) {
     RPi_send_float(TEMPERATURE, temperature);
+    
   } else if (instruction == HUMIDITY) {
     RPi_send_float(HUMIDITY, humidity);
+    
   } else if (instruction == CO2) {
     RPi_send_float(CO2, co2_ppm);
-  } else if (instruction == FAN_SPEED) {
-    if (set_fan_speed(payload, s))
+    
+  } else if (instruction == FAN_INT) {
+    if (set_internal_fan_speed(payload, s))
+      send_ack(instruction);
+    else
+      send_error(instruction);
+      
+  } else if (instruction == FAN_EXT) {
+    if (set_external_fan_speed(payload, s))
       send_ack(instruction);
     else
       send_error(instruction);
@@ -158,31 +149,50 @@ void handle_instruction(byte instruction, byte* payload, unsigned int s) {
       send_ack(instruction);
     else
       send_error(instruction);
+      
   } else if (instruction == LED) {
-    if (set_LED(payload, s)) send_ack(instruction);
-    else send_error(instruction);
+    if (set_LED(payload, s)) 
+      send_ack(instruction);
+    else 
+      send_error(instruction);
   }
 }
 
-unsigned int validate_and_get_size(byte header) {
-  if (!is_handshake(header)) {  // Validate
-    return 0;
-  }
+void validate_and_handle_msg(byte header) {
+  if (!is_valid_header(header)) return;
   
-  unsigned int s = get_size(header); // Get the size of the oncoming payload
+  unsigned int s = get_size(header);
 
-  return s;
-}
+  if (s < 2) return;
 
-void flush_input_buffer() {
-  int s = Serial.available();
+  byte* msg = (byte *)malloc(sizeof(byte)*s);
 
-  if (s > 0) {
-    byte* payload = malloc(sizeof(byte) * s);
-    Serial.readBytes(payload, s);
-    free(payload);
+  Serial.readBytes(msg, s);
+
+  if (validate_checksum(msg, s)) {
+    byte instruction = msg[0];
+    byte *payload = &msg[1];
+    unsigned int pl_size = s - 2;
+    
+    handle_instruction(instruction, payload, pl_size);
   }
+
+  free(msg);
 }
+
+bool validate_checksum(byte* payload, unsigned int s) {
+  byte cs = 0;
+
+  for (int i=0; i<s-1; i++) { 
+    cs += payload[i];
+  }
+
+  cs %= 0x100;
+
+  if (payload[s-1] == cs) return true;
+  else return false;
+}
+
 
 void send_ack(byte packet)
 {
@@ -194,8 +204,8 @@ void send_error(byte packet)
   Serial.write(~packet); // Return a negated instruction to signify an error
 }
 
-bool is_handshake(byte packet) {
-  if ((packet & CONTROL_MASK) == HANDSHAKE_FLAG) return true;
+bool is_valid_header(byte packet) {
+  if ((packet & CONTROL_MASK) == HEADER_FLAG) return true;
   else return false;
 }
 
@@ -214,10 +224,18 @@ void RPi_send_float(byte type, float data) {
   Serial.println(buf);
 }
 
-bool set_fan_speed(byte* payload, unsigned int s) {
+bool set_internal_fan_speed(byte* payload, unsigned int s) {
+  return set_fan_speed(payload, s, FAN_INT_PIN);
+}
+
+bool set_external_fan_speed(byte* payload, unsigned int s) {
+  return set_fan_speed(payload, s, FAN_EXT_PIN);
+}
+
+bool set_fan_speed(byte* payload, unsigned int s, int pin_num) {
   if (s < 1) return false;
   byte spd = payload[0]; // Only use 1 byte
-  analogWrite(FAN_INT_PIN, spd);
+  analogWrite(pin_num, spd);
   return true;
 }
 

@@ -5,8 +5,8 @@ source config.sh
 SERVER_LOG="$LOG_FOLDER/server.log"
 LISTENER_LOG="$LOG_FOLDER/listener.log"
 
-rm SERVER_LOG
-rm LISTENER_LOG
+rm $SERVER_LOG
+rm $LISTENER_LOG
 
 # Meant to run from pi@raspberrypi_bjornapr:~
 nohup python server.py > $SERVER_LOG 2>&1 &

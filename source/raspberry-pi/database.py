@@ -67,6 +67,17 @@ class db:
 
         return interval_id
 
+    def update_interval(self, interval_id, column_name, value):
+        db = lite.connect(self.path)
+        c = db.cursor()
+
+        values = (column_name, value, interval_id)
+
+        c.execute('UPDATE intervals SET ?=? WHERE id=?', values)
+
+        db.commit()
+        db.close()
+
     def insert_readings(self, records):
         '''
             records should be a list of tuples, on the form:
@@ -89,6 +100,10 @@ class db:
         insert_readings([record])
 
     def new_experiment(self, title, start_time, interval_length, description=''):
+        '''
+            Create a new experiment if it doesn't exist already.
+            Returns the id of the experiment.
+        '''
         db = lite.connect(self.path)
         c = db.cursor()
 
@@ -107,7 +122,26 @@ class db:
 
         return experiment_id
 
-    def get_readings(self, SQL, values):
+    def experiment_exists(self, title):
+        '''
+            Returns False if an experiment with the given title doesn't exist
+            Returns the experiment id if at least one such experiment does.
+        '''
+        db = lite.connect(self.path)
+        c = db.cursor()
+        values = (title,)
+
+        c.execute('SELECT id FROM experiments WHERE title=?', values)
+
+        readings = c.fetchall()
+        db.close()
+
+        if len(readings) > 0:
+            return readings[0][0] # The id itself is nested in a tuple and an array
+        else:
+            return False
+
+    def execute_SQL(self, SQL, values):
         '''
             General helper function that queries the DB
         '''
@@ -134,7 +168,7 @@ class db:
                 WHERE strftime('%Y-%m-%dT%H', collect_time)=?
                 GROUP BY strftime('%Y-%m-%dT%H:%M:00', collect_time)
                 '''
-        return self.get_readings(SQL, values)
+        return self.execute_SQL(SQL, values)
 
     def get_readings_day(self, day):
         '''
@@ -150,26 +184,69 @@ class db:
                 GROUP BY strftime('%Y-%m-%dT%H:00:00', collect_time)
                 '''
 
-        return self.get_readings(SQL, values)
+        return self.execute_SQL(SQL, values)
 
-    def experiment_exists(self, title):
+    def print_experiment(self, experiment_title):
         '''
-            Returns False if an experiment with the given title doesn't exist
-            Returns the experiment id if at least one such experiment does.
+            Prints the parameters and results of an experiment
         '''
-        db = lite.connect(self.path)
-        c = db.cursor()
-        values = (title,)
 
-        c.execute('SELECT id FROM experiments WHERE title=?', values)
+        SQL =   '''
+                SELECT *
+                FROM experiments
+                WHERE title=?
+                '''
+        values = (experiment_title,)
 
-        readings = c.fetchall()
-        db.close()
+        result = self.execute_SQL(SQL, values)
 
-        if len(readings) > 0:
-            return readings[0][0] # The id itself is nested in a tuple and an array
-        else:
-            return False
+        if len(result) < 1:
+            print 'can\'t find experiment with title', experiment_title
+
+        experiment_metadata = result[0]
+
+        experiment_id = experiment_metadata[0]
+
+        print 'TITLE:           ', experiment_metadata[1]
+        print 'Description:     ', experiment_metadata[2]
+        print 'start time:      ', experiment_metadata[3]
+        print 'interval length: ', experiment_metadata[4]
+
+        SQL =   '''
+                SELECT *
+                FROM intervals
+                WHERE experiment_id IN
+                    (SELECT id
+                    FROM experiments
+                    WHERE title=?
+                    )
+                '''
+
+        values = (experiment_title,)
+
+        intervals = self.execute_SQL(SQL, values)
+
+        SQL =   '''
+                SELECT co2
+                FROM readings
+                WHERE interval_id=?
+                ORDER BY collect_time
+                '''
+
+        for interval_metadata in intervals:
+            interval_id = interval_metadata[0]
+
+            print '\tInterval id:', interval_id
+            print '\t(r, w, b):', (interval_metadata[1], interval_metadata[2], interval_metadata[3])
+            values = (interval_id,)
+            readings = self.execute_SQL(SQL, values)
+            if len(readings) < 2:
+                print 'NOT SUFFICIENT READINGS THIS INTERVAL'
+            else:
+                print '\t\tInitial CO2:', readings[0][0]
+                print '\t\tEnd CO2:    ', readings[-1][0]
+
+
 
 if __name__ == "__main__":
     s = db("debug")
