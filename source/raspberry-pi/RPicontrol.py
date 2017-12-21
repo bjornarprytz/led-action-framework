@@ -6,7 +6,7 @@ from arduinoPi import * # imports datetime
 
 
 class PlantEnvironmentControl:
-    def __init__(self, db_name='plantdb', arduino_port='/dev/ttyACM0'):
+    def __init__(self, db_name='plantdb', arduino_port='/dev/ttyACM0', grace=3):
         '''
             Initialise the Arduino interface, and connect to a database to store
             the readings.
@@ -15,6 +15,11 @@ class PlantEnvironmentControl:
         self.db = database.db(db_name)
         self.db.init_db()
         self.db_up_to_date = False
+
+        print "Grace period for Arduino (",grace," seconds)"
+        for _ in range(grace):
+            time.sleep(1)
+            print '.'
 
     def run_experiment(self, title, description, interval_length, num_intervals, normalization_time):
         '''
@@ -191,7 +196,53 @@ class PlantEnvironmentControl:
     def clamp(self, val, mn, mx):
         return max(mn, min(val, mx))
 
-def parse_args():
+    def sunrise(self, f, t, period):
+
+        from_setting = np.array(f, dtype=np.uint8)
+        to_setting = np.array(t, dtype=np.uint8)
+        if len(from_setting) != 3 or len(to_setting) != 3:
+            print "SUNRISE: from_light and to_light invalid. must be on form [red, white, blue]"
+            return
+
+        start = datetime.datetime.now()
+        setting = np.array(from_setting, dtype=np.uint8)
+
+        if period < 10:
+            period = 10 # At least 10 seconds to avoid division by zero
+
+        change = (to_setting - from_setting) / (period / 10) # find how much the light has to change every 10 seconds
+
+        while (self.seconds_passed_since(start) < period):
+            self.arduino.command(LED, setting)
+            setting += change
+            time.sleep(10)
+        self.arduino.command(LED, to_setting)
+
+    def sunset(self, f, t, period):
+        from_setting = np.array(f, dtype=np.uint8)
+        to_setting = np.array(t, dtype=np.uint8)
+        if len(from_setting) != 3 or len(to_setting) != 3:
+            print "SUNSET: from_light and to_light invalid. must be on form [red, white, blue]"
+            return
+
+        start = datetime.datetime.now()
+        setting = np.array(from_setting, dtype=np.uint8)
+
+        if period < 10:
+            period = 10 # At least 10 seconds to avoid division by zero
+
+        change = (from_setting - to_setting) / (period / 10) # find how much the light has to change every 10 seconds
+
+        while (self.seconds_passed_since(start) < period):
+            self.arduino.command(LED, setting)
+            setting -= change
+            time.sleep(10)
+        self.arduino.command(LED, to_setting)
+
+def __parse_args():
+    '''
+        private function for running this script
+    '''
     if len(sys.argv) < 5:
         print "Usage: python", sys.argv[0], "title interval_length num_intervals normalization_time [description]"
         exit()
@@ -210,11 +261,6 @@ def parse_args():
 
 if __name__ == "__main__":
     handler = PlantEnvironmentControl()
-    print "Grace period for Arduino"
-    grace = 3
-    for _ in range(grace):
-        time.sleep(1)
-        print '.'
 
     if len(sys.argv) == 1:
         while True:
@@ -222,7 +268,7 @@ if __name__ == "__main__":
 
             handler.control(key)
 
-    title, description, interval_length, num_intervals, normalization_time = parse_args()
+    title, description, interval_length, num_intervals, normalization_time = __parse_args()
 
     handler.run_experiment(title, description, interval_length, num_intervals, normalization_time)
 

@@ -121,11 +121,11 @@ class Arduino:
             print "invalid size:", size
             return
 
-
-
+        type_b = np.array([t], dtype=np.uint8)
+        value_b = np.array(v, dtype=np.uint8)
 
         header = np.array ([HEADER_FLAG | size], dtype=np.uint8)
-        payload = np.array ([t] + v, dtype=np.uint8)
+        payload = np.concatenate((type_b, value_b))
         checksum = np.array([self.get_checksum(payload)], dtype=np.uint8)
 
         command = np.concatenate((header, payload, checksum))
