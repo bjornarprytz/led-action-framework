@@ -26,9 +26,21 @@ void hum_temp_reading(char address, byte *buf) {
 }
 
 float get_hum_from_reading(byte *buf) {
-  return (float)(((buf[0] & 0x3f) << 8 | buf[1]) * (100.0 / 0x3fff));
+  byte msb = buf[0] & 0x3f; // Only need 14 bits total (mask: 00111111)
+  byte lsb = buf[1];
+
+  float adjusted_humidity = (float)((msb << 8 | lsb) * (100.0 / 0x3fff)); // adjust the reading to a percentage (0-100)
+
+  return adjusted_humidity;
+  //   return (float)(((buf[0] & 0x3f) << 8 | buf[1]) * (100.0 / 0x3fff));
 }
 
 float get_temp_from_reading(byte *buf) {
-  return (float)((buf[2] << 8 | (buf[3] & 0xfc)) * (165.0 / 0xfffc) - 40);
+  byte msb = buf[2];
+  byte lsb = buf[3] & 0xfc;
+
+  float adjusted_temp = (float)((msb << 8 | lsb) * (165.0 / 0xfffc)-40); // adjust the reading to the range -40-125 degrees celcius
+
+  return adjusted_temp;
+  // return (float)((buf[2] << 8 | (buf[3] & 0xfc)) * (165.0 / 0xfffc) - 40);
 }

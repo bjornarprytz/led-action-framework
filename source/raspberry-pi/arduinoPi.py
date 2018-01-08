@@ -5,8 +5,8 @@ import serial as s
 import numpy as np
 import datetime
 
-CONTROL_MASK    = 0b11110000
 HEADER_FLAG     = 0b10100000 # 0xA0
+CONTROL_MASK    = 0xF0 # 0b11110000
 SIZE_MASK       = 0x0F # 0b00001111
 
 TEMPERATURE     = 0x00 # 0b00000000
