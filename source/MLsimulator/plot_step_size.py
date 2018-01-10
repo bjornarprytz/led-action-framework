@@ -12,7 +12,7 @@ if __name__ == "__main__":
     w = np.array(wht_LED)
     r = np.array(red_LED)
     b = np.array(blu_LED)
-    pr = np.array(plt_PAR)
+    pr = np.array(mean_PAR)
 
     plt.ion()
 
@@ -46,21 +46,21 @@ if __name__ == "__main__":
         hill_climber = indi.Individual(w,r,b)
 
         hill_climber.random_start()
-        step_size = (k+1)*0.01
+        step_size = (k+1)*0.005
 
         iterations = hill_climber.hc_get_iterations(pr, 0.000001, step=step_size)
 
-        result = hill_climber.cost_func(pr)
+        result = hill_climber.reward_func(pr)
 
         stepsz_x.append(step_size)
         result_y.append(result)
 
-        if result <= best_result:
+        if result >= best_result:
             # lower is better
             best_result = result
             best_res_idx = k
 
-        if result >= worst_result:
+        if result <= worst_result:
             worst_result = result
             worst_res_idx = k
 
@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
         print result,"with step size:",step_size
 
-        records.append({'step_size' : step_size, 'result' : result, 'iterations' : iterations})
+        records.append({'step_size' : step_size, 'result' : result, 'iterations' : iterations, 'weights' : hill_climber.weights.copy()})
 
 
 

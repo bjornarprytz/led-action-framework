@@ -1,7 +1,7 @@
 import numpy as np
 import random as rand
 import math
-LED_RESOLUTION = 10
+LED_RESOLUTION = 256
 INFINITY = 9999999999
 
 class Individual:
@@ -17,7 +17,7 @@ class Individual:
 
         self.weights = weights.copy()
 
-        self.cost = INFINITY
+        self.reward = 0
 
         self.resolution = LED_RESOLUTION
 
@@ -25,22 +25,74 @@ class Individual:
         self._min_temp = 0.00001    # When to stop annealing
         self._alpha = 0.90          # Change in temperature between each iteration
 
-    def cost_func(self, action_spectrum):
+    def energy_consumption(self):
         """
-            --Cost Function--
-            Evaluate the input PAR values and return the cost (lower is better)
+            The Petunia LED units have 5 red LEDs, 6 white LEDs and 1 blue LED, so
+            the energy consumption estimate should reflect that.
 
-            action_spectrum are arrays of equal size, representing the LED output
-            and the action spectrum of the plant across a range of wavelengths.
+            At 500 mA, the estimate in watts is:
+                    (normalized)
+            R: 5.25  (3.4)
+            W: 9.3   (6)
+            B: 1,55  (1)
         """
 
-        # TODO: Take energy consumption into account
+        red_channel_wattage = 3.4
+        white_channel_wattage = 6.0
+        blue_channel_wattage = 1.0
 
-        diff = action_spectrum - self.get_PAR_output()
+        return (self.weights['a'] * red_channel_wattage) +(self.weights['b'] * white_channel_wattage) + (self.weights['c'] * blue_channel_wattage)
 
-        cost = np.sum(np.sqrt(diff**2))
+    def quantum_yield(self, action_spectrum):
+        """
+            Simulate plant utilization of the output radiance based on the model action spectrum
 
-        return cost
+            The best possible quantum_yield would be if the action spectrum were flat 1.0. Then
+            all radiance would be efficiently turned into product
+        """
+
+        spectral_QY = action_spectrum * self.get_PAR_output()
+
+        print self.weights
+        print self.get_PAR_output()
+        exit()
+
+        # print spectral_QY
+
+        quantum_yield = np.mean(spectral_QY)
+
+        # print quantum_yield
+        # exit()
+
+        return quantum_yield
+
+    def reward_func(self, action_spectrum):
+        """
+            --Reward Function--
+            Evaluate the input PAR values and return the reward
+
+            action_spectrum and self.get_PAR_output() are arrays of equal size,
+            representing the LED output and the action spectrum of the plant
+            across a range of wavelengths.
+        """
+
+        ew = 0.2 # Energy weight
+
+        energy =  self.energy_consumption() * ew
+
+        # print energy
+
+        quantum_yield = self.quantum_yield(action_spectrum)
+
+        # print quantum_yield
+
+        reward = quantum_yield #/ energy
+
+        # print reward
+        #
+        # exit()
+
+        return reward
 
 
     def random_start(self):
@@ -49,8 +101,8 @@ class Individual:
             self.weights[key] = float(rand.randint(0,LED_RESOLUTION)) / float(LED_RESOLUTION)
 
 
-    def get_cost(self):
-        return self.cost
+    def get_reward(self):
+        return self.reward
 
     def get_PAR_output(self):
         '''
@@ -61,10 +113,10 @@ class Individual:
         b = self.weights['b']
         c = self.weights['c']
 
-        return (self.w * a) + (self.r * b) + (self.b * c)
+        return (self.r * a) + (self.w * b) + (self.b * c)
 
     def print_stats(self):
-        print (self.w, self.r, self.b, self.cost)
+        print (self.w, self.r, self.b, self.reward)
 
     def neighbour(self, channel=None):
         '''
@@ -83,9 +135,9 @@ class Individual:
 
         return new_individual
 
-    def acceptance_probability(self, old_cost, new_cost):
+    def acceptance_probability(self, old_reward, new_reward):
         try:
-            ap = math.exp((old_cost - new_cost) / self._temperature)
+            ap = math.exp((new_reward - old_reward) / self._temperature)
         except OverflowError:
             ap = 1
         if ap > 1:
@@ -100,7 +152,7 @@ class Individual:
             Simulated annealing for an input number of iterations. If
             iterations is -1, it will run until temperature reaches min_temp
         '''
-        old_cost = self.cost_func(action_spectrum)
+        old_reward = self.reward_func(action_spectrum)
 
         best_setting = self
 
@@ -113,12 +165,12 @@ class Individual:
                 break
             for i in range(tries_per_temp):
                 new_setting = best_setting.neighbour() # Generate a random neighbour
-                new_cost = new_setting.cost_func(action_spectrum) # Evaluate the new solution
-                ap = self.acceptance_probability(old_cost, new_cost)
+                new_reward = new_setting.reward_func(action_spectrum) # Evaluate the new solution
+                ap = self.acceptance_probability(old_reward, new_reward)
 
                 if ap > rand.random():
                     best_setting = new_setting
-                    old_cost = new_cost
+                    old_reward = new_reward
 
             self._temperature *= self._alpha
             if iterations > 0:
@@ -137,16 +189,16 @@ class Individual:
             weights[channel] = 1.0
 
         up = Individual(self.w, self.r, self.b, weights)
-        cost_up = up.cost_func(action_spectrum)
+        reward_up = up.reward_func(action_spectrum)
 
         weights[channel] -= (step*2)
         if (weights[channel] < 0):
             weights[channel] = 0.0
         down = Individual(self.w, self.r, self.b, weights)
-        cost_down = down.cost_func(action_spectrum)
+        reward_down = down.reward_func(action_spectrum)
 
-        # lower cost is better
-        if cost_up < cost_down:
+        # higher reward is better
+        if reward_up > reward_down:
             return up
         else:
             return down
@@ -170,7 +222,7 @@ class Individual:
         """
 
         best_individual = self
-        lowest_cost = self.cost
+        highest_reward = self.reward
         if step == 0.0:
             step = float(1.0 / self.resolution)
 
@@ -178,20 +230,20 @@ class Individual:
 
         for key in self.weights.keys():
              individual = self.probe(key, step, action_spectrum)
-             cost = individual.cost_func(action_spectrum)
-             if cost < lowest_cost:
+             reward = individual.reward_func(action_spectrum)
+             if reward > highest_reward:
                  new_best = True
-                 lowest_cost = cost
+                 highest_reward = reward
                  best_individual = individual
 
         if new_best:
             for key in self.weights.keys():
                 self.weights[key] = best_individual.weights[key]
 
-        new_cost = self.cost_func(action_spectrum)
+        new_reward = self.reward_func(action_spectrum)
 
-        delta = self.cost - new_cost
-        self.cost = new_cost
+        delta = new_reward - self.reward
+        self.reward = new_reward
         return delta
 
     def hc_get_iterations(self, action_spectrum, tolerance, step=0.0):

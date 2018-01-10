@@ -12,7 +12,7 @@ if __name__ == "__main__":
     w = np.array(wht_LED)
     r = np.array(red_LED)
     b = np.array(blu_LED)
-    pr = np.array(plt_PAR)
+    pr = np.array(mean_PAR)
 
     plt.ion()
 
@@ -47,16 +47,16 @@ if __name__ == "__main__":
 
         best_annealer, iterations = annealer.anneal(pr)
 
-        result = best_annealer.cost_func(pr)
+        result = best_annealer.reward_func(pr)
 
         result_y.append(result)
 
-        if result <= best_result:
+        if result >= best_result:
             # lower is better
             best_result = result
             best_res_idx = k
 
-        if result >= worst_result:
+        if result <= worst_result:
             worst_result = result
             worst_res_idx = k
 
@@ -68,7 +68,7 @@ if __name__ == "__main__":
             most_iters = iterations
             most_iters_idx = k
 
-        records.append({'result' : result, 'iterations' : iterations})
+        records.append({'result' : result, 'iterations' : iterations, 'weights' : annealer.weights.copy()})
 
 
 
