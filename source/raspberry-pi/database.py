@@ -186,6 +186,45 @@ class db:
 
         return self.execute_SQL(SQL, values)
 
+    def get_readings_from_experiment_by_interval(self, title):
+        '''
+            returns all readings from an experiment, averaged and grouped by minute
+            listed by interval
+        '''
+
+        values = (title,)
+
+        SQL =   '''
+                SELECT id
+                FROM intervals
+                WHERE experiment_id IN
+                    (SELECT id
+                    FROM experiments
+                    WHERE title=?)
+                '''
+
+        interval_ids = self.execute_SQL(SQL, values)
+
+        intervals = []
+
+        SQL =   '''
+                SELECT strftime('%H%M', collect_time), AVG(temperature), AVG(humidity), AVG(co2)
+                FROM readings
+                WHERE interval_id=?
+                GROUP BY strftime('%Y-%m-%dT%H:%M:00', collect_time)
+                '''
+
+        for interval_id in interval_ids:
+            values = (interval_id[0],)
+
+            readings = self.execute_SQL(SQL, values)
+
+            intervals.append(readings)
+
+        return intervals
+
+
+
     def print_experiment(self, experiment_title):
         '''
             Prints the parameters and results of an experiment

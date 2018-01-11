@@ -11,10 +11,12 @@ from pprint import pprint
 
 db_name = "plantdb"
 dst_folder = "static/assets/"
-week_fn = "weeks.json"
 days_postfix = "_days.json"
 hour_postfix = "_H.json"
-recent_fn = "recent.json"
+experiment_postfix = "_exp.json"
+recent_fn = "recent.json" # labels for the recent hours
+week_fn = "weeks.json" # labels for the past days (a week)
+intervals_fn = "intervals.json" # labels for the intervals in an experiment
 params = ['temp', 'hum', 'co2']
 date_format = '%Y-%m-%d %H:%M:%S'
 
@@ -117,7 +119,7 @@ def log_days(start, num_days=7):
 
     for d in range(num_days):   # For each day
         for r in readings[d]:   # For each hour
-            h = int(r[0][-2:])   # Hour
+            h = int(r[0][-2:])  # Hour
             temp = r[1]         # Temperature
             hum = r[2]          # Humidity
             co2 = r[3]          # Carbon-Dioxide
@@ -134,8 +136,74 @@ def log_days(start, num_days=7):
     week_path = dst_folder+week_fn
     write_json(week_path, week)
 
+def log_experiment(title):
+    '''
+        Make JSON for each inteval in an experiment
+    '''
+
+    db = database.db(db_name)
+
+    readings_by_interval = db.get_readings_from_experiment_by_interval(title)
+
+
+    num_intervals = len(readings_by_interval)
+    if num_intervals < 1:
+        print 'error finding experiment: ',title, num_intervals,' intervals'
+        return
+
+    # Create the JSON file for the labels (interval id)
+    interval_labels = range(num_intervals)
+    interval_labels_path = dst_folder+intervals_fn
+    write_json(interval_labels_path, interval_labels)
+
+    readings_per_interval = len(readings_by_interval[0])
+
+    json = {} # This will catalogue readings by minutes and interval and parameter
+
+    for param in params:
+        json[param] = []
+        for i in range(num_intervals):
+            json[param].append({'values': [0] * readings_per_interval})
+
+    for i in range(num_intervals):              # For each interval
+        t=0                                     # Keep count on the time
+        for reading in readings_by_interval[i]: # For each reading
+            if t >= readings_per_interval:
+                break
+            temp = reading[1]
+            hum = reading[2]
+            co2 = reading[3]
+
+            json['temp'][i]['values'][t] = temp
+            json['hum'][i]['values'][t] = hum
+            json['co2'][i]['values'][t] = co2
+
+            t+=1
+
+    for param in params:
+        experiment_path = dst_folder+param+experiment_postfix
+        write_json(experiment_path, json[param])
+
+    '''
+        JSON:
+        {
+            'param':[ ***interval***
+                        {'values' : [0,0,0,....,0]}, ***t=0***
+                        {'values' : [0,0,0,....,0]}, ***t=1***
+                        ...
+                        {'values' : [0,0,0,....,0]}  ***t=rpi-1***
+                    ]
+                    ...
+                    [
+                        'values'...
+                    ]
+            ...
+        }
+    '''
+
 if __name__ == "__main__":
     # make_plot()
-    now = datetime.datetime.now()
-    log_hours(now)
-    log_days(now)
+    #now = datetime.datetime.now()
+    #log_hours(now)
+    #log_days(now)
+    log_experiment('test experiment')

@@ -53,9 +53,6 @@ class Individual:
 
         spectral_QY = action_spectrum * self.get_PAR_output()
 
-        print self.weights
-        print self.get_PAR_output()
-        exit()
 
         # print spectral_QY
 

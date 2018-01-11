@@ -5,7 +5,7 @@ import serial as s
 import numpy as np
 import datetime
 
-HEADER_FLAG     = 0b10100000 # 0xA0
+HEADER_FLAG     = 0xA0 # 0b10100000
 CONTROL_MASK    = 0xF0 # 0b11110000
 SIZE_MASK       = 0x0F # 0b00001111
 
@@ -19,6 +19,8 @@ LED             = 0x06 # 0b00000110
 
 DAMPERS_CLOSED  = 0
 DAMPERS_OPEN    = 1
+
+FLOAT_ERROR     = -1
 
 class Arduino:
     def __init__(self, serial_port):
@@ -61,6 +63,9 @@ class Arduino:
         else:
             print "invalid ACK! mismatching response and ack", hex(response), hex(ack)
 
+    def flush_rcv_buf(self):
+        self.serial.reset_input_buffer() # Flush input buffer, discarding all its contents
+
 
     def request(self, t, retries=3):
         '''
@@ -73,7 +78,7 @@ class Arduino:
         req = self.make_request(t)
         print "sending request:", [hex(b) for b in req]
         self.serial.write(req)
-        response = self.receive_uint8()
+        response = self.receive_uint8() # Get the ack or error
 
         ack = t
         err = ~t
@@ -81,15 +86,21 @@ class Arduino:
         if response == ack:
             value = self.receive_float()
 
+            if value == FLOAT_ERROR:
+                self.flush_rcv_buf() # Flush buffer in case there is a synchronization error
+                self.request(t, retries-1)
+                return
+
             if t == CO2:
                 self.co2_ppm = value
             elif t == HUMIDITY:
                 self.humidity = value
             elif t == TEMPERATURE:
                 self.temperature = value
+
         elif response == err:
-            time.sleep(0.2)
-            request(t, retries-1)
+            time.sleep(0.2) # Wait a moment in case the microcontroller is backed up
+            self.request(t, retries-1)
         else:
             self.error = 'response neither ACK, nor ERROR (', t, '+ ',response,')'
 
@@ -116,7 +127,7 @@ class Arduino:
             (x) is a function of the payload
         '''
 
-        size = len(v) + 2; # +2 for instruction and checksum
+        size = len(v) + 2; # +2 for instruction and checksum bytes
         if size > 0x0F:
             print "invalid size:", size
             return
@@ -166,13 +177,19 @@ class Arduino:
         '''
             Expects to receive 4 bytes from the arduino.
         '''
-        allowed = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '.']
+        allowed_chars = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '.']
 
         rsp = self.serial.readline()
 
-        rsp = filter(lambda char: char in allowed, rsp) # Sanitize input to avoid noise
+        rsp = filter(lambda char: char in allowed_chars, rsp) # Sanitize input to avoid noise
 
-        return float(rsp)
+        # May still receive frankenstein input, so catch the exception
+        try:
+            rsp = float(rsp)
+        except ValueError:
+            rsp = FLOAT_ERROR
+
+        return rsp
 
     def receive_uint8(self):
         '''

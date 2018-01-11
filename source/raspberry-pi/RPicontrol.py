@@ -4,6 +4,10 @@ import database
 import sys
 from arduinoPi import * # imports datetime
 
+FANS_OFF = 0x00
+FANS_LOW = 0x40
+FANS_HIGH = 0x80
+FANS_FULL = 0xFF
 
 class PlantEnvironmentControl:
     def __init__(self, db_name='plantdb', arduino_port='/dev/ttyACM0', grace=3):
@@ -21,7 +25,7 @@ class PlantEnvironmentControl:
             time.sleep(1)
             print '.'
 
-    def run_experiment(self, title, description, interval_length, num_intervals, normalization_time):
+    def run_experiment(self, title, description, interval_length, num_intervals, normalization_time, seed_setting={'r':0xFF, 'w':0xFF, 'b':0xFF}):
         '''
             Run a full experiment cycle with a set number of intervals
         '''
@@ -29,13 +33,14 @@ class PlantEnvironmentControl:
 
         experiment_id = self.db.new_experiment(title, start_time, interval_length, description)
 
+        red = seed_setting['r']
+        white = seed_setting['w']
+        blue = seed_setting['b']
+
         for i in range(num_intervals):
             self.normalize(air_out_time=normalization_time)
 
-            # TODO: Insert ML search for new input vector
-            red = np.random.randint(0x100)
-            white = np.random.randint(0x100)
-            blue = np.random.randint(0x100)
+            # TODO: Insert search for new input vector
 
             self.run_interval(experiment_id, red, white, blue, interval_length)
             self.shut_down()
@@ -46,8 +51,8 @@ class PlantEnvironmentControl:
         '''
 
         self.arduino.command(SERVOS, [DAMPERS_CLOSED])
-        self.arduino.command(FAN_EXT, [0x00])
-        self.arduino.command(FAN_INT, [0x00])
+        self.arduino.command(FAN_EXT, [FANS_OFF])
+        self.arduino.command(FAN_INT, [FANS_LOW])
         self.arduino.command(LED, [0,0,0])
 
     def normalize(self, air_out_time=20, delta_co2_threshold_ppm=10):
@@ -65,8 +70,8 @@ class PlantEnvironmentControl:
         # OPEN DAMPERS AND MAX ALL FANS
         print 'Open dampers and max all fans'
         self.arduino.command(SERVOS, [DAMPERS_OPEN])
-        self.arduino.command(FAN_EXT, [0xFF])
-        self.arduino.command(FAN_INT, [0xFF])
+        self.arduino.command(FAN_EXT, [FANS_FULL])
+        self.arduino.command(FAN_INT, [FANS_FULL])
 
         # TAKE MEASUREMENT OF CARBON DIOXIDE
         print 'MEASURE CO2'
@@ -91,8 +96,8 @@ class PlantEnvironmentControl:
             print 'Warning: Arduino communication has broken down', new_co2, prev_co2
 
         # ADJUST BACK TO NORMAL PROCEDURE
-        self.arduino.command(FAN_EXT, [0x00])
-        self.arduino.command(FAN_INT, [0x80])
+        self.arduino.command(FAN_EXT, [FANS_OFF])
+        self.arduino.command(FAN_INT, [FANS_LOW])
         self.arduino.command(SERVOS, [DAMPERS_CLOSED])
 
         print "normalization complete at delta_co2:", delta_co2
@@ -120,24 +125,24 @@ class PlantEnvironmentControl:
         # Adjust LED to new settings
         self.arduino.command(LED, [red, white, blue])
         # Wait for a while and take readings
-        self.wait_and_read(interval_id, length)
-        #
+        self.wait_and_read(interval_id, length) # loop
+        # Do one last reading, just to be safe
         self.update()
         self.log(interval_id)
 
     def seconds_passed_since(self, start):
         return (datetime.datetime.now() - start).seconds
 
-    def wait_and_read(self, interval_id, length):
+    def wait_and_read(self, interval_id, length, read_frequency=4):
         '''
-            Wait for the input length (seconds) of time and do periodic readings
+            Wait for the input length (seconds) of time and do periodic readings in the meantime
         '''
         start = datetime.datetime.now()
 
         while self.seconds_passed_since(start) < length:
             self.update()
             self.log(interval_id)
-            time.sleep(2)
+            time.sleep(read_frequency)
 
 
     def log(self, interval_id):
@@ -194,6 +199,9 @@ class PlantEnvironmentControl:
             self.arduino.command(LED, [red, white, blue])
 
     def clamp(self, val, mn, mx):
+        '''
+            clamp return value between (inclusive) mn and mx
+        '''
         return max(mn, min(val, mx))
 
     def sunrise(self, f, t, period):
