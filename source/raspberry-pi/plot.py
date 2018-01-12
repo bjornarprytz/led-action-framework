@@ -136,10 +136,60 @@ def log_days(start, num_days=7):
     week_path = dst_folder+week_fn
     write_json(week_path, week)
 
+def plot_experiment(title, filename):
+    '''
+        Plot the CO2 levels over an interval
+    '''
+
+    db = database.db(db_name)
+
+    readings_by_interval = db.get_readings_from_experiment_by_interval(title)
+    # print readings_by_interval
+
+    colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+
+    co2_fig = plt.figure()
+    co2_ax = co2_fig.add_subplot(111)
+
+    i = 0
+    for interval in readings_by_interval:
+        if len(interval) < 1:
+            continue
+        t = 0
+        temp = []
+        hum = []
+        co2 = []
+        time = []
+        for reading in interval:
+            time.append(t)
+            co2.append(reading[3])
+            t+=1
+
+        plt.plot(time, co2, '.-', color=colors[i%len(colors)])
+        i += 1
+
+    co2_ax.axis([0, t-1, 300, 1000])
+    plt.ylabel('CO2 ppm')
+    plt.xlabel('Time (minutes)')
+    plt.savefig(filename)
+
+
+    # Title - Date
+
+    # Function for comparing experiments too
+
+
 def log_experiment(title):
     '''
+
+        DEPRECATED
+
         Make JSON for each inteval in an experiment
     '''
+
+    print "DEPRECATED FUNCTION: log_experiment()"
+
+    return
 
     db = database.db(db_name)
 
@@ -181,7 +231,7 @@ def log_experiment(title):
             t+=1
 
     for param in params:
-        experiment_path = dst_folder+param+experiment_postfix
+        experiment_path = dst_folder+title+param+experiment_postfix
         write_json(experiment_path, json[param])
 
     '''
@@ -206,4 +256,4 @@ if __name__ == "__main__":
     #now = datetime.datetime.now()
     #log_hours(now)
     #log_days(now)
-    log_experiment('test experiment')
+    plot_experiment('baseline', 'testfig_co2')

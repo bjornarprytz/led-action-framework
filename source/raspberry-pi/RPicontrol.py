@@ -38,12 +38,16 @@ class PlantEnvironmentControl:
         blue = seed_setting['b']
 
         for i in range(num_intervals):
-            self.normalize(air_out_time=normalization_time)
+
+            interval_id = self.db.new_interval([red, white, blue, experiment_id])
+
+            self.normalize(interval_id, air_out_time=normalization_time)
 
             # TODO: Insert search for new input vector
 
-            self.run_interval(experiment_id, red, white, blue, interval_length)
+            self.run_interval(interval_id, red, white, blue, interval_length)
             self.shut_down()
+
 
     def shut_down(self):
         '''
@@ -55,7 +59,7 @@ class PlantEnvironmentControl:
         self.arduino.command(FAN_INT, [FANS_LOW])
         self.arduino.command(LED, [0,0,0])
 
-    def normalize(self, air_out_time=20, delta_co2_threshold_ppm=10):
+    def normalize(self, interval_id, air_out_time=20, delta_co2_threshold_ppm=10):
         '''
             Open chamber and normalize the internal air by turning up fans
 
@@ -72,6 +76,7 @@ class PlantEnvironmentControl:
         self.arduino.command(SERVOS, [DAMPERS_OPEN])
         self.arduino.command(FAN_EXT, [FANS_FULL])
         self.arduino.command(FAN_INT, [FANS_FULL])
+        self.arduino.command(LED, [0,0,0])
 
         # TAKE MEASUREMENT OF CARBON DIOXIDE
         print 'MEASURE CO2'
@@ -79,7 +84,7 @@ class PlantEnvironmentControl:
 
         # WAIT FOR AIRFRLOW TO GET GOING
         print 'Letting air flow for', air_out_time, 'seconds'
-        time.sleep(air_out_time)
+        self.wait_and_read(interval_id, air_out_time)
 
         # KEEP AIRING OUT CHAMBER UNTIL DELTA CO2 IS LOW ENOUGH
         new_co2 = self.arduino.read_val(CO2)
@@ -104,20 +109,19 @@ class PlantEnvironmentControl:
 
         return
 
-    def run_interval(self, experiment_id, red, white, blue, length):
+    def run_interval(self, interval_id, red, white, blue, length):
         '''
             Intervals Phases:
                 1: Adjust LED channels, measure CO2
                 2: Wait and do readings while Photosynthesis does work
                 3: measure CO2 again
         '''
-        print 'experiment ID:', experiment_id
         print 'red:', red
         print 'white:', white
         print 'blue:', blue
         print 'length:', length
 
-        interval_id = self.db.new_interval([red, white, blue, experiment_id])
+
 
         # Take measurements from Arduino and log it in the database
         self.update()

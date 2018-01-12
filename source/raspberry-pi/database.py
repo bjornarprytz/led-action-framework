@@ -117,6 +117,8 @@ class db:
             experiment_id = self.experiment_exists(title)
 
 
+
+
         db.commit()
         db.close()
 
@@ -208,7 +210,7 @@ class db:
         intervals = []
 
         SQL =   '''
-                SELECT strftime('%H%M', collect_time), AVG(temperature), AVG(humidity), AVG(co2)
+                SELECT strftime('%Y-%m-%dT%H:%M', collect_time), AVG(temperature), AVG(humidity), AVG(co2)
                 FROM readings
                 WHERE interval_id=?
                 GROUP BY strftime('%Y-%m-%dT%H:%M:00', collect_time)
@@ -222,7 +224,6 @@ class db:
             intervals.append(readings)
 
         return intervals
-
 
 
     def print_experiment(self, experiment_title):
