@@ -5,8 +5,7 @@ import time
 
 if __name__ == "__main__":
     update_interval = 10 # seconds
-    plot_interval = 1 # minutes
-    now = last_plot = last_log = last_update = datetime.datetime.now()
+    now = last_update = datetime.datetime.now()
 
     interval_length = 300 # seconds
 
@@ -28,11 +27,4 @@ if __name__ == "__main__":
             handler.log(experiment_id)
             last_update = datetime.datetime.now()
 
-
-        if now - last_plot >= datetime.timedelta(minutes=plot_interval):
-            print "plotting: ", now
-            plot.log_hours(now)
-            plot.log_days(now)
-            last_plot = datetime.datetime.now()
-
-        time.sleep(1) # not to take up too much CPU
+        time.sleep(1) # not to take up too much CPU time

@@ -116,9 +116,6 @@ class db:
             print('sqlite error: ', e.args[0])
             experiment_id = self.experiment_exists(title)
 
-
-
-
         db.commit()
         db.close()
 
@@ -152,10 +149,10 @@ class db:
 
         c.execute(SQL, values)
 
-        readings = c.fetchall()
+        result = c.fetchall()
         db.close()
 
-        return readings
+        return result
 
     def get_readings_hour(self, hour):
         '''
@@ -225,6 +222,17 @@ class db:
 
         return intervals
 
+    def get_experiment_description(self, title):
+
+        SQL =   '''
+                SELECT description
+                FROM experiments
+                WHERE title=?
+                '''
+
+        values = (title, )
+
+        return self.execute_SQL(SQL, values)
 
     def print_experiment(self, experiment_title):
         '''

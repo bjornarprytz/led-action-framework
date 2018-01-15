@@ -2,7 +2,8 @@
 import time
 import database
 import sys
-from arduinoPi import * # imports datetime
+from arduinoPi import * # imports datetime, numpy and serial
+import list_ports
 
 FANS_OFF = 0x00
 FANS_LOW = 0x40
@@ -10,12 +11,22 @@ FANS_HIGH = 0x80
 FANS_FULL = 0xFF
 
 class PlantEnvironmentControl:
-    def __init__(self, db_name='plantdb', arduino_port='/dev/ttyACM0', grace=3):
+    def __init__(self, db_name='plantdb', port_list=['/dev/ttyACM0', '/dev/ttyACM1'], grace=3):
         '''
             Initialise the Arduino interface, and connect to a database to store
             the readings.
         '''
-        self.arduino = Arduino(arduino_port)
+
+        serial_port = self.find_available_port(port_list)
+
+        if serial_port == None:
+            print port_list, 'were not available'
+            return
+
+        self.arduino = Arduino(serial_port)
+
+
+
         self.db = database.db(db_name)
         self.db.init_db()
         self.db_up_to_date = False
@@ -24,6 +35,16 @@ class PlantEnvironmentControl:
         for _ in range(grace):
             time.sleep(1)
             print '.'
+
+    def find_available_port(self, port_list):
+        '''
+            Look for the ports in the given port_list among the connected serial ports.
+        '''
+        for available_port in list_ports.serial_ports():
+            for port_to_try in port_list:
+                if port_to_try == available_port:
+                    return available_port
+        return None
 
     def run_experiment(self, title, description, interval_length, num_intervals, normalization_time, seed_setting={'r':0xFF, 'w':0xFF, 'b':0xFF}):
         '''
@@ -79,33 +100,33 @@ class PlantEnvironmentControl:
         self.arduino.command(LED, [0,0,0])
 
         # TAKE MEASUREMENT OF CARBON DIOXIDE
-        print 'MEASURE CO2'
-        prev_co2 = self.arduino.read_val(CO2)
+        # print 'MEASURE CO2'
+        # prev_co2 = self.arduino.read_val(CO2)
 
         # WAIT FOR AIRFRLOW TO GET GOING
         print 'Letting air flow for', air_out_time, 'seconds'
         self.wait_and_read(interval_id, air_out_time)
 
         # KEEP AIRING OUT CHAMBER UNTIL DELTA CO2 IS LOW ENOUGH
-        new_co2 = self.arduino.read_val(CO2)
-        delta_co2 = prev_co2 - new_co2
-        print 'delta CO2:', delta_co2
-        while delta_co2 > delta_co2_threshold_ppm:
-            prev_co2 = new_co2
-            time.sleep(5)
-            new_co2 = self.arduino.read_val(CO2)
-            delta_co2 = prev_co2 - new_co2
-            print 'delta CO2:', delta_co2
-
-        if prev_co2 == -1 or new_co2 == -1:
-            print 'Warning: Arduino communication has broken down', new_co2, prev_co2
+        # new_co2 = self.arduino.read_val(CO2)
+        # delta_co2 = prev_co2 - new_co2
+        # print 'delta CO2:', delta_co2
+        # while delta_co2 > delta_co2_threshold_ppm:
+        #     prev_co2 = new_co2
+        #     time.sleep(5)
+        #     new_co2 = self.arduino.read_val(CO2)
+        #     delta_co2 = prev_co2 - new_co2
+        #     print 'delta CO2:', delta_co2
+        #
+        # if prev_co2 == -1 or new_co2 == -1:
+        #     print 'Warning: Arduino communication has broken down', new_co2, prev_co2
 
         # ADJUST BACK TO NORMAL PROCEDURE
         self.arduino.command(FAN_EXT, [FANS_OFF])
         self.arduino.command(FAN_INT, [FANS_LOW])
         self.arduino.command(SERVOS, [DAMPERS_CLOSED])
 
-        print "normalization complete at delta_co2:", delta_co2
+        # print "normalization complete at delta_co2:", delta_co2
 
         return
 
@@ -267,7 +288,8 @@ def __parse_args():
     if len(sys.argv) == 6:
         description = sys.argv[5]
     else:
-        description = ''
+        # Default to description holding normalization_time. This is useful info during data collection
+        description = normalization_time
 
     return title, description, interval_length, num_intervals, normalization_time
 

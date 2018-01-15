@@ -27,6 +27,7 @@ class Arduino:
         '''
             Initialise an interface with an Arduino.
         '''
+
         self.serial = s.Serial(
             port=serial_port,
             baudrate=9600,
@@ -35,6 +36,7 @@ class Arduino:
             bytesize=s.EIGHTBITS,
             timeout=5
         )
+
 
         self.serial.isOpen()
 
