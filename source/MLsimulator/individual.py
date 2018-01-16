@@ -1,14 +1,20 @@
+#!/usr/bin/env python2.7
+
 import numpy as np
 import random as rand
 import math
 LED_RESOLUTION = 256
 INFINITY = 9999999999
 
+red_channel_wattage = 3.4
+white_channel_wattage = 6.0
+blue_channel_wattage = 1.0
+
 class Individual:
     """
     An Individual with a set of three weights (a, b, c) as the genotype.
     """
-    def __init__(self, w, r, b, weights={'a' : 1.0, 'b' : 1.0, 'c' : 1.0}):
+    def __init__(self, w, r, b, energy_allowance, allowance_tolerance=0.0001, weights={'a' : 1.0, 'b' : 1.0, 'c' : 1.0}):
         # w, r and b are arrays representing the documented
         # maximum output profiles for each channel.
         self.w = w
@@ -16,16 +22,17 @@ class Individual:
         self.b = b
 
         self.weights = weights.copy()
-
         self.reward = 0
-
         self.resolution = LED_RESOLUTION
+
+        self.energy_allowance = energy_allowance
+        self.allowance_tolerance = allowance_tolerance
 
         self._temperature = 1.0     # higher temperature -> more exploration. Diminishes each iteration.
         self._min_temp = 0.00001    # When to stop annealing
         self._alpha = 0.90          # Change in temperature between each iteration
 
-    def energy_consumption(self):
+    def energy_consumption(self, weights):
         """
             The Petunia LED units have 5 red LEDs, 6 white LEDs and 1 blue LED, so
             the energy consumption estimate should reflect that.
@@ -37,11 +44,7 @@ class Individual:
             B: 1,55  (1)
         """
 
-        red_channel_wattage = 3.4
-        white_channel_wattage = 6.0
-        blue_channel_wattage = 1.0
-
-        return (self.weights['a'] * red_channel_wattage) +(self.weights['b'] * white_channel_wattage) + (self.weights['c'] * blue_channel_wattage)
+        return (weights['a'] * red_channel_wattage) +(weights['b'] * white_channel_wattage) + (weights['c'] * blue_channel_wattage)
 
     def quantum_yield(self, action_spectrum):
         """
@@ -72,12 +75,6 @@ class Individual:
             representing the LED output and the action spectrum of the plant
             across a range of wavelengths.
         """
-
-        ew = 0.2 # Energy weight
-
-        energy =  self.energy_consumption() * ew
-
-        # print energy
 
         quantum_yield = self.quantum_yield(action_spectrum)
 
@@ -115,18 +112,66 @@ class Individual:
     def print_stats(self):
         print (self.w, self.r, self.b, self.reward)
 
+    def leftover_energy(self, weights):
+        consumption = self.energy_consumption(weights)
+
+        return self.energy_allowance - consumption
+
+    def adjust_channels(self, weights, adjustable_channels):
+        '''
+            Adjust one (or more) of the adjustable channels until the
+            energy allowance is spent
+        '''
+        rand.shuffle(adjustable_channels)
+        # print adjustable_channels
+        for channel in adjustable_channels:
+            budget = self.leftover_energy(weights)
+            print budget
+            if budget > self.allowance_tolerance:
+                if channel == 'a':
+                    weights[channel] += budget / red_channel_wattage
+                if channel == 'b':
+                    weights[channel] += budget / white_channel_wattage
+                if channel == 'c':
+                    weights[channel] += budget / blue_channel_wattage
+
+                print weights[channel]
+                if weights[channel] > 1.0:
+                    weights[channel] = 1.0
+
+
+
     def neighbour(self, channel=None):
         '''
             Generate a random neighbour by changing the weight of one channel.
             If channel is None, randomize the choice of channel.
         '''
 
-        if channel == None:
-            channel = rand.choice(self.weights.keys())
 
         new_weights = self.weights.copy()
 
-        new_weights[channel] = rand.random() # Randomize the weight [0-1]
+        available_channels = adjustable_channels = self.weights.keys()
+
+
+        if channel == None:
+            channel = rand.choice(available_channels)
+
+        while new_weights[channel] == 0.0:
+            if channel in available_channels:
+                available_channels.remove(channel)
+            if len(available_channels) == 0:
+                print "all channels are zero, please reinitialize weights before trying this again"
+                return
+            channel = rand.choice(available_channels)
+
+        if channel in adjustable_channels:
+            adjustable_channels.remove(channel)
+
+        new_weights[channel] = rand.uniform(0.0, new_weights[channel]) # Randomize the weight to a lower number
+
+        print new_weights
+
+        self.adjust_channels(new_weights, adjustable_channels)
 
         new_individual = Individual(self.w, self.r, self.b, new_weights)
 
@@ -251,3 +296,17 @@ class Individual:
             iterations += 1
 
         return iterations
+
+import quantum_yield
+
+if __name__ == "__main__":
+    w = quantum_yield.wht_LED
+    b = quantum_yield.blu_LED
+    r = quantum_yield.red_LED
+    energy_allowance = 3.0
+    I = Individual(w, r, b, energy_allowance, weights={'a' : 0.01, 'b' : 0.01, 'c' : 0.01})
+
+    print I.energy_consumption(I.weights)
+
+
+    print I.neighbour().weights

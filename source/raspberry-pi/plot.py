@@ -137,9 +137,45 @@ def log_days(start, num_days=7):
     week_path = dst_folder+week_fn
     write_json(week_path, week)
 
+def get_colors(num_hues):
+
+    base_value = 0x40
+    max_value = 0xFF
+
+
+    if num_hues > max_value - base_value:
+        print 'asking for too many hues', num_hues
+        num_hues = max_value - base_value
+    elif num_hues < 1:
+        num_hues = 1
+
+
+    red_range = range(num_hues)
+    green_range = range(num_hues)
+    blue_range = range(num_hues)
+
+    step = (max_value - base_value) / num_hues
+
+
+    for v in range(num_hues):
+        value = base_value + v*step
+
+        red = value << 16
+        green = value << 8
+        blue = value
+
+        red_range[v] = '#'+str(hex(red))[2:]
+        green_range[v] = '#00'+str(hex(green))[2:]
+        blue_range[v] = '#0000'+str(hex(blue))[2:]
+
+    colors = {'r' : red_range, 'g' : green_range, 'b' : blue_range}
+
+    return colors
+
 def plot_experiment(title, filename):
     '''
-        Plot the CO2 levels of intervals in the same experiment against each other
+        Plot the various measurements of intervals in the same experiment against
+        each other and save the figure in a folder
     '''
 
     db = database.db(db_name)
@@ -147,44 +183,69 @@ def plot_experiment(title, filename):
     readings_by_interval = db.get_readings_from_experiment_by_interval(title)
     # print readings_by_interval
 
-    colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
 
-    co2_fig = plt.figure()
-    co2_ax = co2_fig.add_subplot(111)
+    co2_by_interval = []
+    hum_by_interval = []
+    temp_by_interval = []
 
-    i = 0
     for interval in readings_by_interval:
         if len(interval) < 1:
             continue
-        t = 0
         temp = []
         hum = []
         co2 = []
-        time = []
         for reading in interval:
-            time.append(t)
             temp.append(reading[1])
             hum.append(reading[2])
             co2.append(reading[3])
-            t+=1
 
-        plt.plot(time, co2, '.-', color=colors[ i % len(colors)])
-        i += 1
+        co2_by_interval.append(co2)
+        hum_by_interval.append(hum)
+        temp_by_interval.append(temp)
+
+    time = range(len(interval))
+    colors = get_colors(len(readings_by_interval))
 
     try:
         description = db.get_experiment_description(title)[0][0]
-        print description
         normalization_time = float(description) / 60.0 # Minutes
-        print normalization_time
-        plt.axvline(normalization_time)
-        plt.text(normalization_time+0.1,980,'normalization_over',rotation=-90)
     except ValueError:
+        normalization_time=0
         print 'could not extract normalization_time from database'
 
-    co2_ax.axis([0, t-1, 300, 1000])
+    co2_axis = plt.subplot(211)
+    co2_axis.axis([time[0], time[-1], 350, 750])
     plt.title(str(len(readings_by_interval))+' intervals with identical system settings')
+    plt.setp(co2_axis.get_xticklabels(), visible=False) # Hide the x-axis values
     plt.ylabel('CO2 ppm')
+    plt.axvline(normalization_time)
+
+    i=0
+    for co2_series in co2_by_interval:
+        plt.plot(time, co2_series, '.-', color=colors['r'][i])
+        i+=1
+
+    hum_axis = plt.subplot(413, sharex=co2_axis)
+    hum_axis.axis([time[0], time[-1], 0, 100])
+    plt.setp(hum_axis.get_xticklabels(), visible=False)
+    plt.ylabel('Rel humidity')
+    plt.axvline(normalization_time)
+    i=0
+    for hum_series in hum_by_interval:
+        plt.plot(time, hum_series, '.-', color=colors['b'][i])
+        i+=1
+
+
+    temp_axis = plt.subplot(414, sharex=co2_axis)
+    temp_axis.axis([time[0], time[-1], 10, 35])
+    plt.ylabel('Temperature (C)')
     plt.xlabel('Time (minutes)')
+    plt.axvline(normalization_time)
+    i=0
+    for temp_series in temp_by_interval:
+        plt.plot(time, temp_series, '.-', color=colors['g'][i])
+        i+=1
+
     plt.savefig(fig_folder+filename)
 
 
@@ -270,4 +331,4 @@ if __name__ == "__main__":
     #now = datetime.datetime.now()
     #log_hours(now)
     #log_days(now)
-    plot_experiment('baseline', 'testfig_co2')
+    plot_experiment('baseline_1501_0', 'testfig')

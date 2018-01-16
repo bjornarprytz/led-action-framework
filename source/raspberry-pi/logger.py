@@ -8,10 +8,11 @@ if __name__ == "__main__":
     now = last_update = datetime.datetime.now()
 
     while True:
+        now = datetime.datetime.now()
         if now - last_update >= datetime.timedelta(minutes=update_interval):
             print "Updating JSON: ", now
             plot.log_hours(now)
             plot.log_days(now)
             last_update = datetime.datetime.now()
 
-            time.sleep(1) # not to take up too much CPU time
+        time.sleep(1) # not to take up too much CPU time
