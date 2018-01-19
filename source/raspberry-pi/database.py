@@ -36,6 +36,7 @@ class db:
                 temperature REAL,
                 humidity REAL,
                 co2 REAL,
+                co2_ext REAL,
                 interval_id INT NOT NULL,
                 FOREIGN KEY(interval_id) REFERENCES intervals(id)
                 )
@@ -82,22 +83,22 @@ class db:
         '''
             records should be a list of tuples, on the form:
             [
-            (collect_time, temperature, humidity, co2, interval_id),
-            (collect_time, temperature, humidity, co2, interval_id),
+            (collect_time, temperature, humidity, co2, co2_ext, interval_id),
+            (collect_time, temperature, humidity, co2, co2_ext, interval_id),
             ...
-            (collect_time, temperature, humidity, co2, interval_id)
+            (collect_time, temperature, humidity, co2, co2_ext, interval_id)
             ]
         '''
         db = lite.connect(self.path)
         c = db.cursor()
 
-        c.execute('INSERT INTO readings(collect_time, temperature, humidity, co2, interval_id) VALUES (?,?,?,?,?)', records)
+        c.execute('INSERT INTO readings(collect_time, temperature, humidity, co2, co2_ext, interval_id) VALUES (?,?,?,?,?,?)', records)
 
         db.commit()
         db.close()
 
     def insert_reading(self, record):
-        insert_readings([record])
+        self.insert_readings([record])
 
     def new_experiment(self, title, start_time, interval_length, description=''):
         '''
@@ -162,7 +163,7 @@ class db:
         values = (hour,)
 
         SQL =   '''
-                SELECT strftime('%H%M', collect_time), AVG(temperature), AVG(humidity), AVG(co2)
+                SELECT strftime('%H%M', collect_time), AVG(temperature), AVG(humidity), AVG(co2), AVG(co2_ext)
                 FROM readings
                 WHERE strftime('%Y-%m-%dT%H', collect_time)=?
                 GROUP BY strftime('%Y-%m-%dT%H:%M:00', collect_time)
@@ -177,7 +178,7 @@ class db:
         values = (day,)
 
         SQL =   '''
-                SELECT strftime('%Y-%m-%dT%H', collect_time), AVG(temperature), AVG(humidity), AVG(co2)
+                SELECT strftime('%Y-%m-%dT%H', collect_time), AVG(temperature), AVG(humidity), AVG(co2), AVG(co2_ext)
                 FROM readings
                 WHERE strftime('%Y-%m-%d', collect_time)=?
                 GROUP BY strftime('%Y-%m-%dT%H:00:00', collect_time)
@@ -207,7 +208,7 @@ class db:
         intervals = []
 
         SQL =   '''
-                SELECT strftime('%Y-%m-%dT%H:%M', collect_time), AVG(temperature), AVG(humidity), AVG(co2)
+                SELECT strftime('%Y-%m-%dT%H:%M', collect_time), AVG(temperature), AVG(humidity), AVG(co2), AVG(co2_ext)
                 FROM readings
                 WHERE interval_id=?
                 GROUP BY strftime('%Y-%m-%dT%H:%M:00', collect_time)
@@ -275,7 +276,7 @@ class db:
         intervals = self.execute_SQL(SQL, values)
 
         SQL =   '''
-                SELECT co2
+                SELECT co2, co2_ext
                 FROM readings
                 WHERE interval_id=?
                 ORDER BY collect_time
@@ -292,7 +293,9 @@ class db:
                 print 'NOT SUFFICIENT READINGS THIS INTERVAL'
             else:
                 print '\t\tInitial CO2:', readings[0][0]
+                print '\t\t\tDelta:    ', reaidngs[0][1] - readings[0][0]
                 print '\t\tEnd CO2:    ', readings[-1][0]
+                print '\t\t\tDelta:    ', reaidngs[-1][1] - readings[-1][0]
 
 
 

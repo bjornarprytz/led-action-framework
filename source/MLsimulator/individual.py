@@ -14,23 +14,25 @@ class Individual:
     """
     An Individual with a set of three weights (a, b, c) as the genotype.
     """
-    def __init__(self, w, r, b, energy_allowance, allowance_tolerance=0.0001, weights={'a' : 1.0, 'b' : 1.0, 'c' : 1.0}):
+    def __init__(self, w, r, b, energy_allowance, weights={'a' : 0.5, 'b' : 0.5, 'c' : 0.5}):
         # w, r and b are arrays representing the documented
         # maximum output profiles for each channel.
         self.w = w
         self.r = r
         self.b = b
 
-        self.weights = weights.copy()
+
         self.reward = 0
         self.resolution = LED_RESOLUTION
 
         self.energy_allowance = energy_allowance
-        self.allowance_tolerance = allowance_tolerance
 
         self._temperature = 1.0     # higher temperature -> more exploration. Diminishes each iteration.
         self._min_temp = 0.00001    # When to stop annealing
         self._alpha = 0.90          # Change in temperature between each iteration
+
+        self.weights = weights.copy()
+        self.adjust_channels(weights.copy(), ['a', 'b', 'c'])
 
     def energy_consumption(self, weights):
         """
@@ -61,6 +63,8 @@ class Individual:
 
         quantum_yield = np.mean(spectral_QY)
 
+        # TODO: Simulate the Emerson Enhancement effect
+
         # print quantum_yield
         # exit()
 
@@ -76,11 +80,11 @@ class Individual:
             across a range of wavelengths.
         """
 
-        quantum_yield = self.quantum_yield(action_spectrum)
+        QY = self.quantum_yield(action_spectrum)
 
         # print quantum_yield
 
-        reward = quantum_yield #/ energy
+        reward = QY #/ energy
 
         # print reward
         #
@@ -103,16 +107,16 @@ class Individual:
             Calculate the PAR output from the LED array according to the current
             settings on each channel.
         '''
-        a = self.weights['a']
-        b = self.weights['b']
-        c = self.weights['c']
+        a = np.array(self.weights['a'])
+        b = np.array(self.weights['b'])
+        c = np.array(self.weights['c'])
 
         return (self.r * a) + (self.w * b) + (self.b * c)
 
     def print_stats(self):
         print (self.w, self.r, self.b, self.reward)
 
-    def leftover_energy(self, weights):
+    def energy_budget(self, weights):
         consumption = self.energy_consumption(weights)
 
         return self.energy_allowance - consumption
@@ -125,9 +129,9 @@ class Individual:
         rand.shuffle(adjustable_channels)
         # print adjustable_channels
         for channel in adjustable_channels:
-            budget = self.leftover_energy(weights)
-            print budget
-            if budget > self.allowance_tolerance:
+            budget = self.energy_budget(weights)
+
+            if budget != 0.0:
                 if channel == 'a':
                     weights[channel] += budget / red_channel_wattage
                 if channel == 'b':
@@ -135,13 +139,16 @@ class Individual:
                 if channel == 'c':
                     weights[channel] += budget / blue_channel_wattage
 
-                print weights[channel]
                 if weights[channel] > 1.0:
                     weights[channel] = 1.0
+                elif weights[channel] <= 0.0:
+                    weights[channel] = 0.0
+
+        return weights.copy()
 
 
 
-    def neighbour(self, channel=None):
+    def neighbour(self, channel=None, step=0.0):
         '''
             Generate a random neighbour by changing the weight of one channel.
             If channel is None, randomize the choice of channel.
@@ -150,30 +157,24 @@ class Individual:
 
         new_weights = self.weights.copy()
 
-        available_channels = adjustable_channels = self.weights.keys()
+        available_channels = self.weights.keys()
 
 
         if channel == None:
             channel = rand.choice(available_channels)
 
-        while new_weights[channel] == 0.0:
-            if channel in available_channels:
-                available_channels.remove(channel)
-            if len(available_channels) == 0:
-                print "all channels are zero, please reinitialize weights before trying this again"
-                return
-            channel = rand.choice(available_channels)
+        if step == 0.0:
+            new_weights[channel] = rand.uniform(0.0, 1.0) # Randomize the weight
+        else:
+            new_weights[channel] += step
+            if new_weights[channel] > 1.0:
+                new_weights[channel] = 1.0
+            if new_weights[channel] < 0.0:
+                new_weights[channel] = 0.0
 
-        if channel in adjustable_channels:
-            adjustable_channels.remove(channel)
+        new_weights = self.adjust_channels(new_weights, available_channels)
 
-        new_weights[channel] = rand.uniform(0.0, new_weights[channel]) # Randomize the weight to a lower number
-
-        print new_weights
-
-        self.adjust_channels(new_weights, adjustable_channels)
-
-        new_individual = Individual(self.w, self.r, self.b, new_weights)
+        new_individual = Individual(self.w, self.r, self.b, self.energy_allowance, weights=new_weights.copy())
 
         return new_individual
 
@@ -257,26 +258,25 @@ class Individual:
         self.resolution = res
 
 
-    def hill_climb(self, action_spectrum, step=0.0):
-        """
-        Try changing the weights a, b and c one by one, in both directions, and evaluate them to see which
-        neighbour is the most promising.
-        """
+
+    def hill_climb(self, action_spectrum, step):
 
         best_individual = self
         highest_reward = self.reward
         if step == 0.0:
-            step = float(1.0 / self.resolution)
+            print 'step size:', step
+            return
 
         new_best = False
 
         for key in self.weights.keys():
-             individual = self.probe(key, step, action_spectrum)
-             reward = individual.reward_func(action_spectrum)
-             if reward > highest_reward:
-                 new_best = True
-                 highest_reward = reward
-                 best_individual = individual
+            individual = self.neighbour(channel=key, step=step)
+
+            reward = individual.reward_func(action_spectrum)
+            if reward > highest_reward:
+                new_best = True
+                highest_reward = reward
+                best_individual = individual
 
         if new_best:
             for key in self.weights.keys():
@@ -286,7 +286,41 @@ class Individual:
 
         delta = new_reward - self.reward
         self.reward = new_reward
+
         return delta
+
+
+
+    # def hill_climb(self, action_spectrum, step=0.0):
+    #     """
+    #     Try changing the weights a, b and c one by one, in both directions, and evaluate them to see which
+    #     neighbour is the most promising.
+    #     """
+    #
+    #     best_individual = self
+    #     highest_reward = self.reward
+    #     if step == 0.0:
+    #         step = float(1.0 / self.resolution)
+    #
+    #     new_best = False
+    #
+    #     for key in self.weights.keys():
+    #          individual = self.probe(key, step, action_spectrum)
+    #          reward = individual.reward_func(action_spectrum)
+    #          if reward > highest_reward:
+    #              new_best = True
+    #              highest_reward = reward
+    #              best_individual = individual
+    #
+    #     if new_best:
+    #         for key in self.weights.keys():
+    #             self.weights[key] = best_individual.weights[key]
+    #
+    #     new_reward = self.reward_func(action_spectrum)
+    #
+    #     delta = new_reward - self.reward
+    #     self.reward = new_reward
+    #     return delta
 
     def hc_get_iterations(self, action_spectrum, tolerance, step=0.0):
         delta = 100.0
@@ -303,10 +337,14 @@ if __name__ == "__main__":
     w = quantum_yield.wht_LED
     b = quantum_yield.blu_LED
     r = quantum_yield.red_LED
-    energy_allowance = 3.0
-    I = Individual(w, r, b, energy_allowance, weights={'a' : 0.01, 'b' : 0.01, 'c' : 0.01})
+    pr = quantum_yield.radish_PAR
+    energy_allowance = 8
+    I = Individual(w, r, b, energy_allowance, weights={'a' : 0.5, 'b' : 0.5, 'c' : 0.5})
 
+    print I.hc_get_iterations(pr, 0.00001, step=0.1)
+
+
+
+    print I.weights
+    print 'reward:', I.reward_func(pr)
     print I.energy_consumption(I.weights)
-
-
-    print I.neighbour().weights

@@ -10,3 +10,4 @@
 let color_temp = "green";
 let color_hum = "blue";
 let color_co2 = "red";
+let color_co2_ext = 'violet'

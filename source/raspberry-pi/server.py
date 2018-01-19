@@ -41,18 +41,6 @@ def intervals():
 def weeks():
     return app.send_static_file("assets/weeks.json")
 
-@app.route('/temp_exp/<string:exp_title>')
-def temp_exp(exp_title):
-    return app.send_static_file("assets/"+exp_title+"temp"+plot.experiment_postfix)
-
-@app.route('/hum_exp/<string:exp_title>')
-def hum_exp(exp_title):
-    return app.send_static_file("assets/"+exp_title+"hum"+plot.experiment_postfix)
-
-@app.route('/co2_exp/<string:exp_title>')
-def co2_exp(exp_title):
-    return app.send_static_file("assets/"+exp_title+"co2"+plot.experiment_postfix)
-
 @app.route('/temperature')
 def temperature():
     return app.send_static_file("assets/temp_days.json")
@@ -61,10 +49,13 @@ def temperature():
 def carbon_dioxide():
     return app.send_static_file("assets/co2_days.json")
 
+@app.route('/carbon_dioxide_ext')
+def carbon_dioxide_ext():
+    return app.send_static_file("assets/co2_ext_days.json")
+
 @app.route('/humidity')
 def humidity():
     return app.send_static_file("assets/hum_days.json")
-
 
 @app.route('/temp_hour')
 def temp_hour():
@@ -77,6 +68,10 @@ def hum_hour():
 @app.route('/co2_hour')
 def co2_hour():
     return app.send_static_file("assets/co2_H.json")
+
+@app.route('/co2_ext_hour')
+def co2_ext_hour():
+    return app.send_static_file("assets/co2_ext_H.json")
 
 @app.route('/recent')
 def recent():

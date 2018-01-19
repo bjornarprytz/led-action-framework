@@ -67,7 +67,44 @@ class PlantEnvironmentControl:
             # TODO: Insert search for new input vector
 
             self.run_interval(interval_id, red, white, blue, interval_length)
-            self.shut_down()
+        self.shut_down()
+
+    def run_continuous_intervals(self, title, interval_length, num_intervals, seed_setting={'r':0xFF, 'w':0xFF, 'b':0xFF}):
+        '''
+            Run intervals continually, with some circulation with outside air at all times.
+            A pair of interval should test a different LED setting for the given amount of time.
+            The first interval of the pair should be dark, for reference.
+            Log results in the database for later evaluation.
+        '''
+
+
+        start_time = datetime.datetime.now()
+
+        experiment_id = self.db.new_experiment(title, start_time, interval_length, 0)
+
+        red = seed_setting['r']
+        white = seed_setting['w']
+        blue = seed_setting['b']
+
+        self.circulation(FANS_HIGH)
+
+        for i in range(num_intervals):
+            dark_interval_id = self.db.new_interval([0,0,0, experiment_id])
+            self.run_interval(dark_interval_id, 0, 0, 0, interval_length)
+            light_interval_id = self.db.new_interval([red, white, blue, experiment_id])
+            self.run_interval(light_interval_id, red, white, blue, experiment_id)
+
+            red = (red + 0x10) % 0x100
+            white = (white + 0x10) % 0x100
+            blue = (blue + 0x10) % 0x100
+
+    def circulation(self, strength):
+        '''
+            Open for circulation.
+        '''
+        self.arduino.command(SERVOS, [DAMPERS_OPEN])
+        self.arduino.command(FAN_EXT,[strength])
+        self.arduino.command(FAN_INT, [strength])
 
 
     def shut_down(self):
@@ -77,8 +114,8 @@ class PlantEnvironmentControl:
 
         self.arduino.command(SERVOS, [DAMPERS_CLOSED])
         self.arduino.command(FAN_EXT, [FANS_OFF])
-        self.arduino.command(FAN_INT, [FANS_LOW])
-        self.arduino.command(LED, [0,0,0])
+        self.arduino.command(FAN_INT, [FANS_FULL])
+        self.arduino.command(LED, [64,64,64])
 
     def normalize(self, interval_id, air_out_time=20, delta_co2_threshold_ppm=10):
         '''
@@ -92,12 +129,15 @@ class PlantEnvironmentControl:
         '''
 
         print 'Normalizing test environments'
+        if air_out_time < 20:
+            print 'normalization time too low', air_out_time
+            print 'aborting'
+            return
         # OPEN DAMPERS AND MAX ALL FANS
         print 'Open dampers and max all fans'
         self.arduino.command(SERVOS, [DAMPERS_OPEN])
         self.arduino.command(FAN_EXT, [FANS_FULL])
-        self.arduino.command(FAN_INT, [FANS_FULL])
-        self.arduino.command(LED, [0,0,0])
+        self.arduino.command(LED, [64,64,64])
 
         # TAKE MEASUREMENT OF CARBON DIOXIDE
         # print 'MEASURE CO2'
@@ -123,7 +163,6 @@ class PlantEnvironmentControl:
 
         # ADJUST BACK TO NORMAL PROCEDURE
         self.arduino.command(FAN_EXT, [FANS_OFF])
-        self.arduino.command(FAN_INT, [FANS_LOW])
         self.arduino.command(SERVOS, [DAMPERS_CLOSED])
 
         # print "normalization complete at delta_co2:", delta_co2
@@ -144,9 +183,7 @@ class PlantEnvironmentControl:
 
 
 
-        # Take measurements from Arduino and log it in the database
-        self.update()
-        self.log(interval_id)
+        self.arduino.command(FAN_INT, [FANS_FULL])
         # Adjust LED to new settings
         self.arduino.command(LED, [red, white, blue])
         # Wait for a while and take readings
@@ -158,7 +195,7 @@ class PlantEnvironmentControl:
     def seconds_passed_since(self, start):
         return (datetime.datetime.now() - start).seconds
 
-    def wait_and_read(self, interval_id, length, read_frequency=4):
+    def wait_and_read(self, interval_id, length, read_frequency=10):
         '''
             Wait for the input length (seconds) of time and do periodic readings in the meantime
         '''
@@ -179,8 +216,8 @@ class PlantEnvironmentControl:
             print "database already has this reading logged"
             return
 
-        print self.arduino.time_stamp, self.arduino.temperature, self.arduino.humidity, self.arduino.co2_ppm
-        self.db.insert_readings((self.arduino.time_stamp, self.arduino.temperature, self.arduino.humidity, self.arduino.co2_ppm, interval_id))
+        print self.arduino.time_stamp, self.arduino.temperature, self.arduino.humidity, self.arduino.co2_ppm, self.arduino.co2_ext_ppm
+        self.db.insert_readings((self.arduino.time_stamp, self.arduino.temperature, self.arduino.humidity, self.arduino.co2_ppm, self.arduino.co2_ext_ppm, interval_id))
 
         self.db_up_to_date = True
 

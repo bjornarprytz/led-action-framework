@@ -18,7 +18,7 @@ experiment_postfix = "_exp.json"
 recent_fn = "recent.json" # labels for the recent hours
 week_fn = "weeks.json" # labels for the past days (a week)
 intervals_fn = "intervals.json" # labels for the intervals in an experiment
-params = ['temp', 'hum', 'co2']
+params = ['temp', 'hum', 'co2', 'co2_ext']
 date_format = '%Y-%m-%d %H:%M:%S'
 
 def log_hours(start, num_hours=6):
@@ -40,7 +40,7 @@ def log_hours(start, num_hours=6):
         readings.append(db.get_readings_hour(hour)) # Gets the aggregate of readings each minute that hour
     '''
         readings= {
-            '%H' : [(0, temp, hum, co2) (1, temp, hum, co2), ... (59, temp, hum, co2)]
+            '%H' : [(0, temp, hum, co2, co2_ext) (1, temp, hum, co2, co2_ext), ... (59, temp, hum, co2, co2_ext)]
             ... *num_hours
         }
     '''
@@ -57,10 +57,12 @@ def log_hours(start, num_hours=6):
             temp = r[1]     # Temperature
             hum = r[2]      # Humidity
             co2 = r[3]      # Carbon-Dioxide
+            co2_ext = r[4]  # External CO2
 
             json['temp'][h]['values'][m] = temp
             json['hum'][h]['values'][m] = hum
             json['co2'][h]['values'][m] = co2
+            json['co2_ext'][h]['values'][m] = co2_ext
 
     '''
         JSON:
@@ -124,10 +126,12 @@ def log_days(start, num_days=7):
             temp = r[1]         # Temperature
             hum = r[2]          # Humidity
             co2 = r[3]          # Carbon-Dioxide
+            co2_ext = r[4]      # External CO2
 
             json['temp'][d]['values'][h] = temp
             json['hum'][d]['values'][h] = hum
             json['co2'][d]['values'][h] = co2
+            json['co2_ext'][d]['values'][h] = co2_ext
 
     # Write the JSON to files: 'static/assets/temp_days.json' etc.
     for param in params:
@@ -183,11 +187,10 @@ def plot_experiment(title, filename):
     readings_by_interval = db.get_readings_from_experiment_by_interval(title)
     # print readings_by_interval
 
-
+    timeline = []
     co2_by_interval = []
     hum_by_interval = []
     temp_by_interval = []
-
     for interval in readings_by_interval:
         if len(interval) < 1:
             continue
@@ -197,11 +200,12 @@ def plot_experiment(title, filename):
         for reading in interval:
             temp.append(reading[1])
             hum.append(reading[2])
-            co2.append(reading[3])
+            co2.append(reading[4] - reading[3])  # Rate of CO2 consumption
 
         co2_by_interval.append(co2)
         hum_by_interval.append(hum)
         temp_by_interval.append(temp)
+
 
     time = range(len(interval))
     colors = get_colors(len(readings_by_interval))
@@ -214,15 +218,15 @@ def plot_experiment(title, filename):
         print 'could not extract normalization_time from database'
 
     co2_axis = plt.subplot(211)
-    co2_axis.axis([time[0], time[-1], 350, 750])
+    co2_axis.axis([time[0], time[-1], 300, 800])
     plt.title(str(len(readings_by_interval))+' intervals with identical system settings')
     plt.setp(co2_axis.get_xticklabels(), visible=False) # Hide the x-axis values
-    plt.ylabel('CO2 ppm')
+    plt.ylabel('CO2 delta')
     plt.axvline(normalization_time)
 
     i=0
     for co2_series in co2_by_interval:
-        plt.plot(time, co2_series, '.-', color=colors['r'][i])
+        plt.plot(co2_series, '.-', color=colors['r'][i])
         i+=1
 
     hum_axis = plt.subplot(413, sharex=co2_axis)
@@ -230,20 +234,21 @@ def plot_experiment(title, filename):
     plt.setp(hum_axis.get_xticklabels(), visible=False)
     plt.ylabel('Rel humidity')
     plt.axvline(normalization_time)
+
     i=0
     for hum_series in hum_by_interval:
-        plt.plot(time, hum_series, '.-', color=colors['b'][i])
+        plt.plot(hum_series, '.-', color=colors['b'][i])
         i+=1
-
 
     temp_axis = plt.subplot(414, sharex=co2_axis)
     temp_axis.axis([time[0], time[-1], 10, 35])
     plt.ylabel('Temperature (C)')
     plt.xlabel('Time (minutes)')
     plt.axvline(normalization_time)
+
     i=0
     for temp_series in temp_by_interval:
-        plt.plot(time, temp_series, '.-', color=colors['g'][i])
+        plt.plot(temp_series, '.-', color=colors['g'][i])
         i+=1
 
     plt.savefig(fig_folder+filename)
@@ -331,4 +336,4 @@ if __name__ == "__main__":
     #now = datetime.datetime.now()
     #log_hours(now)
     #log_days(now)
-    plot_experiment('baseline_1501_0', 'testfig')
+    plot_experiment('baseline_160113', 'testfig')

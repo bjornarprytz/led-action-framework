@@ -16,6 +16,7 @@ let parent_values = [8, 8, 8, 8, 8, 8, 8];
 let temp_day = JSON.parse(Get("temperature"));
 let hum_day = JSON.parse(Get("humidity"));
 let co2_day = JSON.parse(Get("carbon_dioxide"));
+let co2_ext_day = JSON.parse(Get("carbon_dioxide_ext"));
 
 let week_composite = {
 	labels: week,
@@ -49,12 +50,19 @@ let line_composite_humidity_day = {
 
 let line_composite_co2_day = {
 	labels: times_of_day,
-	datasets: [{
-		"title": "CO2",
-		"color": color_co2,
-		"values": co2_day[0]['values'],
+	datasets: [
+		{
+			"title": "CO2",
+			"color": color_co2,
+			"values": co2_day[0]['values'],
 		// "formatted": ["₹ 0.00", "₹ 0.00", "₹ 0.00", "₹ 61,500.00", "₹ 82,936.88", "₹ 24,010.00", "₹ 0.00", "₹ 0.00", "₹ 25,840.00", "₹ 5,08,048.82", "₹ 1,16,820.00", "₹ 0.00"],
-	}]
+		},
+		{
+			"title": "CO2",
+			"color": color_co2_ext,
+			"values": co2_ext_day[0]['values'],
+		},
+	]
 };
 
 
@@ -95,7 +103,7 @@ let hum_day_chart = new Chart ({
 
 
 bar_composite_chart.parent.addEventListener('data-select', (e) => {
-	co2_day_chart.update_values([co2_day[e.index]]);
+	co2_day_chart.update_values([co2_day[e.index], co2_ext_day[e.index]]);
   temp_day_chart.update_values([temp_day[e.index]]);
   hum_day_chart.update_values([hum_day[e.index]]);
 });

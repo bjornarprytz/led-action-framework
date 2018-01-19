@@ -16,6 +16,7 @@ FAN_INT         = 0x03 # 0b00000011
 FAN_EXT         = 0x04 # 0b00000100
 SERVOS          = 0x05 # 0b00000101
 LED             = 0x06 # 0b00000110
+CO2_EXT         = 0x07 # 0b00000111
 
 DAMPERS_CLOSED  = 0
 DAMPERS_OPEN    = 1
@@ -44,6 +45,12 @@ class Arduino:
         self.temperature = 0
         self.humidity = 0
         self.co2_ppm = 0
+        self.co2_ext_ppm = 0
+
+
+        # Error margins derived from measurements with a handheld CO2 sensor (Testo 535)
+        self.internal_co2_error_correction = -145   # (between -140 and -130 @ 430-450 ppm)
+        self.external_co2_error_correction = 55     # (between 45 - 65 @ 470-480 ppm)
 
 
         self.error = ''
@@ -55,6 +62,7 @@ class Arduino:
         '''
         com = self.make_command(t, v)
         print "sending command:", [hex(b) for b in com]
+        self.flush_rcv_buf()
         self.serial.write(com)
         ack = t
         err = ~t
@@ -79,6 +87,7 @@ class Arduino:
 
         req = self.make_request(t)
         print "sending request:", [hex(b) for b in req]
+        self.flush_rcv_buf() # Flush receive buffer, in case there has been a desynch
         self.serial.write(req)
         response = self.receive_uint8() # Get the ack or error
 
@@ -93,12 +102,15 @@ class Arduino:
                 self.request(t, retries-1)
                 return
 
+            print t, value
             if t == CO2:
-                self.co2_ppm = value
+                self.co2_ppm = value + self.internal_co2_error_correction
             elif t == HUMIDITY:
                 self.humidity = value
             elif t == TEMPERATURE:
                 self.temperature = value
+            elif t == CO2_EXT:
+                self.co2_ext_ppm = value + self.external_co2_error_correction
 
         elif response == err:
             time.sleep(0.2) # Wait a moment in case the microcontroller is backed up
@@ -106,7 +118,7 @@ class Arduino:
         else:
             self.error = 'response neither ACK, nor ERROR (', t, '+ ',response,')'
 
-    def update(self, types=[TEMPERATURE, HUMIDITY, CO2]):
+    def update(self, types=[TEMPERATURE, HUMIDITY, CO2, CO2_EXT]):
         '''
             Request [all] (types) of parameters from the Arduino. These are stored
             in-memory on-board the Arduino. Mark the reading with a timestamp.

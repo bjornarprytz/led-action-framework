@@ -12,8 +12,10 @@
 #define FAN_EXT_PIN         9   // External fans
 #define SERVO_Rx_PIN        11  // Not used, but necessary for the SoftwareSerial interface
 #define SERVO_Tx_PIN        10  // Communication with servos is master->slave only
-#define T66_1_Rx_PIN        12
-#define T66_1_Tx_PIN        13
+#define T66_1_Rx_PIN        12  // Internal CO2 sensor receiver
+#define T66_1_Tx_PIN        13  // Internal CO2 sensor transmitter
+#define T66_2_Tx_PIN        50  // External CO2 sensor transmitter
+#define T66_2_Rx_PIN        51  // External CO2 sensor receiver
 
 
 /*
@@ -24,7 +26,11 @@
  */
 
 // Virtual Serial Port
-SoftwareSerial T66_Serial(T66_1_Rx_PIN, T66_1_Tx_PIN);
+SoftwareSerial CO2_internal(T66_1_Rx_PIN, T66_1_Tx_PIN);
+
+
+SoftwareSerial CO2_external(T66_2_Rx_PIN, T66_2_Tx_PIN);
+
 
 // Servo Communication
 SoftwareSerial DamperServos(SERVO_Rx_PIN, SERVO_Tx_PIN);
@@ -47,6 +53,7 @@ const byte FAN_INT      = 0x03;
 const byte FAN_EXT      = 0x04;
 const byte SERVOS       = 0x05;
 const byte LED          = 0x06;
+const byte CO2_EXT      = 0x07;
 
 
 const byte DAMPERS_CLOSED  = 0;
@@ -60,6 +67,7 @@ const byte BLUE = 2;
 float temperature = 0.0;
 float humidity = 0.0;
 float co2_ppm = 0.0;
+float co2_ext_ppm = 13.37;
 byte LED_red   = 0;
 byte LED_white = 0;
 byte LED_blue  = 0;
@@ -67,7 +75,7 @@ byte LED_blue  = 0;
 
 // State Machine
 unsigned long previousMillis = 0;
-unsigned long interval = 2000; // 2 seconds between each reading
+unsigned long interval = 4000; // 2 seconds between each reading
 
 // Fan Test
 unsigned long prevLEDMillis = 0;
@@ -79,9 +87,11 @@ void setup() {
   
   Serial.begin(RPi_BAUD);         // With Raspberry Pi
   hum_temp_init();                
-  T66_Serial.begin(T66_BAUD);     // Opens virtual serial port with the CO2 Sensor
-  DamperServos.begin(SERVO_BAUD);
+  CO2_internal.begin(T66_BAUD);     // Opens virtual serial port with the internal CO2 Sensor
+  CO2_external.begin(T66_BAUD);     // Opens virtual serial port with the external CO2 Sensor
   
+  DamperServos.begin(SERVO_BAUD);
+
   // for debug
   digitalWrite(LED_BUILTIN, LOW);
   analogWrite(FAN_INT_PIN, 0);
@@ -96,8 +106,6 @@ void loop() {
   update_data(currentMillis);  
 }
 
-
-
 void update_data(unsigned long currentMillis) {
   byte h_t_rsp[TEMP_HUM_RSP_SIZE]; // To hold humidity/temperature readings
   
@@ -106,12 +114,12 @@ void update_data(unsigned long currentMillis) {
     hum_temp_reading(HUM_TEMP_ADDRESS, (char*)&h_t_rsp);
     humidity = get_hum_from_reading((char*)&h_t_rsp);
     temperature = get_temp_from_reading((char*)&h_t_rsp);
-    co2_ppm = CO2_reading(&T66_Serial, interval/2);  // Spend at most half an interval here
+    co2_ppm = CO2_reading(&CO2_internal, 1000);  // Spend at most 1 second here
+    co2_ext_ppm = CO2_reading(&CO2_external, 1000); // Spend at most 1 second here
     previousMillis = currentMillis;
     digitalWrite(LED_BUILTIN, LOW);
   }
 }
-
 
 void listen_for_handshake() {
   byte header = 0;
@@ -122,7 +130,17 @@ void listen_for_handshake() {
   }
 }
 
-void handle_instruction(byte instruction, byte* payload, unsigned int s) {
+bool ready_for_requests() {
+  if (is_warming_up(&CO2_internal)) {
+    return false; 
+  }
+  if (is_warming_up(&CO2_external)) {
+    return false;
+  }
+  return true;
+}
+
+void handle_instruction(byte instruction, byte* payload, unsigned int pl_size) {
   
   if (instruction == TEMPERATURE) {
     RPi_send_float(TEMPERATURE, temperature);
@@ -134,45 +152,47 @@ void handle_instruction(byte instruction, byte* payload, unsigned int s) {
     RPi_send_float(CO2, co2_ppm);
     
   } else if (instruction == FAN_INT) {
-    if (set_internal_fan_speed(payload, s))
+    if (set_internal_fan_speed(payload, pl_size))
       send_ack(instruction);
     else
       send_error(instruction);
       
   } else if (instruction == FAN_EXT) {
-    if (set_external_fan_speed(payload, s))
+    if (set_external_fan_speed(payload, pl_size))
       send_ack(instruction);
     else
       send_error(instruction);
   } else if (instruction == SERVOS) {
-    if (set_servos(payload, s))
+    if (set_servos(payload, pl_size))
       send_ack(instruction);
     else
       send_error(instruction);
       
   } else if (instruction == LED) {
-    if (set_LED(payload, s)) 
+    if (set_LED(payload, pl_size)) 
       send_ack(instruction);
     else 
       send_error(instruction);
+  } else if (instruction == CO2_EXT) {
+    RPi_send_float(CO2_EXT, co2_ext_ppm);
   }
 }
 
 void validate_and_handle_msg(byte header) {
   if (!is_valid_header(header)) return;
   
-  unsigned int s = get_size(header);
+  unsigned int msg_size = get_size(header);
 
-  if (s < 2) return;
+  if (msg_size < 2) return;
 
-  byte* msg = (byte *)malloc(sizeof(byte)*s);
+  byte* msg = (byte *)malloc(sizeof(byte)*msg_size);
 
-  Serial.readBytes(msg, s);
+  Serial.readBytes(msg, msg_size);
 
-  if (validate_checksum(msg, s)) {
+  if (validate_checksum(msg, msg_size)) {
     byte instruction = msg[0];
     byte *payload = &msg[1];
-    unsigned int pl_size = s - 2;
+    unsigned int pl_size = msg_size - 2;
     
     handle_instruction(instruction, payload, pl_size);
   }
@@ -180,16 +200,16 @@ void validate_and_handle_msg(byte header) {
   free(msg);
 }
 
-bool validate_checksum(byte* payload, unsigned int s) {
+bool validate_checksum(byte* payload, unsigned int pl_size) {
   byte cs = 0;
 
-  for (int i=0; i<s-1; i++) { 
+  for (int i=0; i<pl_size-1; i++) { 
     cs += payload[i];
   }
 
   cs %= 0x100;
 
-  if (payload[s-1] == cs) return true;
+  if (payload[pl_size-1] == cs) return true;
   else return false;
 }
 
@@ -224,23 +244,23 @@ void RPi_send_float(byte type, float data) {
   Serial.println(buf);
 }
 
-bool set_internal_fan_speed(byte* payload, unsigned int s) {
-  return set_fan_speed(payload, s, FAN_INT_PIN);
+bool set_internal_fan_speed(byte* payload, unsigned int pl_size) {
+  return set_fan_speed(payload, pl_size, FAN_INT_PIN);
 }
 
-bool set_external_fan_speed(byte* payload, unsigned int s) {
-  return set_fan_speed(payload, s, FAN_EXT_PIN);
+bool set_external_fan_speed(byte* payload, unsigned int pl_size) {
+  return set_fan_speed(payload, pl_size, FAN_EXT_PIN);
 }
 
-bool set_fan_speed(byte* payload, unsigned int s, int pin_num) {
-  if (s < 1) return false;
+bool set_fan_speed(byte* payload, unsigned int pl_size, int pin_num) {
+  if (pl_size < 1) return false;
   byte spd = payload[0]; // Only use 1 byte
   analogWrite(pin_num, spd);
   return true;
 }
 
-bool set_servos(byte* payload, unsigned int s) {
-  if (s < 1) return false;
+bool set_servos(byte* payload, unsigned int pl_size) {
+  if (pl_size < 1) return false;
 
   byte signl = payload[0]; // Signal from the Raspberry Pi. 0: close dampers, 1: open dampers
 
@@ -250,10 +270,8 @@ bool set_servos(byte* payload, unsigned int s) {
   return true;
 }
 
-bool set_LED(byte* payload, unsigned int s) {
-  byte packet;
-
-  if (s < 3) return false;
+bool set_LED(byte* payload, unsigned int pl_size) {
+  if (pl_size < 3) return false;
 
   byte red = payload[0];
   byte white = payload[1];

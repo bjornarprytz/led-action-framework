@@ -16,6 +16,7 @@ let parent_values = [8,8,8,8,8,8];
 let temp_hour = JSON.parse(Get("temp_hour"));
 let hum_hour = JSON.parse(Get("hum_hour"));
 let co2_hour = JSON.parse(Get("co2_hour"));
+let co2_ext_hour = JSON.parse(Get("co2_ext_hour"));
 
 
 
@@ -51,12 +52,19 @@ let line_composite_humidity_hour = {
 
 let line_composite_co2_hour = {
 	labels: minutes,
-	datasets: [{
-		"title": "CO2",
-		"color": color_co2,
-		"values": co2_hour[0]['values'],
+	datasets: [
+		{
+			"title": "CO2",
+			"color": color_co2,
+			"values": co2_hour[0]['values'],
 		// "formatted": ["₹ 0.00", "₹ 0.00", "₹ 0.00", "₹ 61,500.00", "₹ 82,936.88", "₹ 24,010.00", "₹ 0.00", "₹ 0.00", "₹ 25,840.00", "₹ 5,08,048.82", "₹ 1,16,820.00", "₹ 0.00"],
-	}]
+		},
+		{
+			"title": "External CO2",
+			"color": color_co2_ext,
+			"values": co2_ext_hour[0]['values'],
+		},
+		]
 };
 
 let bar_composite_chart = new Chart ({
@@ -96,7 +104,7 @@ let hum_hour_chart = new Chart ({
 
 
 bar_composite_chart.parent.addEventListener('data-select', (e) => {
-	co2_hour_chart.update_values([co2_hour[e.index]]);
+	co2_hour_chart.update_values([co2_hour[e.index], co2_ext_hour[e.index]]);
   temp_hour_chart.update_values([temp_hour[e.index]]);
   hum_hour_chart.update_values([hum_hour[e.index]]);
 });
