@@ -54,6 +54,7 @@ const byte FAN_EXT      = 0x04;
 const byte SERVOS       = 0x05;
 const byte LED          = 0x06;
 const byte CO2_EXT      = 0x07;
+const byte CO2_CALIBRATE= 0x08;
 
 
 const byte DAMPERS_CLOSED  = 0;
@@ -72,6 +73,8 @@ byte LED_red   = 0;
 byte LED_white = 0;
 byte LED_blue  = 0;
 
+byte error_code = 0; // Default
+
 
 // State Machine
 unsigned long previousMillis = 0;
@@ -82,6 +85,9 @@ unsigned long prevLEDMillis = 0;
 unsigned long LEDInterval = 5000;
 
 void setup() {
+  analogWrite(FAN_INT_PIN, 0);
+  analogWrite(FAN_EXT_PIN, 0);
+  
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
   
@@ -94,8 +100,6 @@ void setup() {
 
   // for debug
   digitalWrite(LED_BUILTIN, LOW);
-  analogWrite(FAN_INT_PIN, 0);
-  analogWrite(FAN_EXT_PIN, 0);
 }
 
 void loop() {
@@ -110,14 +114,14 @@ void update_data(unsigned long currentMillis) {
   byte h_t_rsp[TEMP_HUM_RSP_SIZE]; // To hold humidity/temperature readings
   
   if (currentMillis - previousMillis > interval) {
-    digitalWrite(LED_BUILTIN, HIGH);
+    //digitalWrite(LED_BUILTIN, HIGH);
     hum_temp_reading(HUM_TEMP_ADDRESS, (char*)&h_t_rsp);
     humidity = get_hum_from_reading((char*)&h_t_rsp);
     temperature = get_temp_from_reading((char*)&h_t_rsp);
     co2_ppm = CO2_reading(&CO2_internal, 1000);  // Spend at most 1 second here
     co2_ext_ppm = CO2_reading(&CO2_external, 1000); // Spend at most 1 second here
     previousMillis = currentMillis;
-    digitalWrite(LED_BUILTIN, LOW);
+    //digitalWrite(LED_BUILTIN, LOW);
   }
 }
 
@@ -131,10 +135,10 @@ void listen_for_handshake() {
 }
 
 bool ready_for_requests() {
-  if (is_warming_up(&CO2_internal)) {
+  if (T66_has_status(&CO2_internal, WARM_UP_FLAG)) {
     return false; 
   }
-  if (is_warming_up(&CO2_external)) {
+  if (T66_has_status(&CO2_external, WARM_UP_FLAG)) {
     return false;
   }
   return true;
@@ -175,6 +179,11 @@ void handle_instruction(byte instruction, byte* payload, unsigned int pl_size) {
       send_error(instruction);
   } else if (instruction == CO2_EXT) {
     RPi_send_float(CO2_EXT, co2_ext_ppm);
+  } else if (instruction == CO2_CALIBRATE) {
+    if (CO2_calibrate(payload, pl_size))
+      send_ack(instruction);
+    else
+      send_error(instruction);
   }
 }
 
@@ -222,6 +231,8 @@ void send_ack(byte packet)
 void send_error(byte packet)
 {
   Serial.write(~packet); // Return a negated instruction to signify an error
+  Serial.write(error_code);
+  error_code = 0;
 }
 
 bool is_valid_header(byte packet) {
@@ -283,3 +294,44 @@ bool set_LED(byte* payload, unsigned int pl_size) {
 
   return true;
 }
+
+bool CO2_calibrate(byte* payload, unsigned int pl_size) {
+  // Start calibrating both CO2 sensors at the same time. Wait for the sensors to finish internal calibration
+  // before returning true or false, depending on the result.
+  if (pl_size != 2)
+    return false;
+
+  digitalWrite(LED_BUILTIN, LOW);
+  int msb = payload[0];
+  int lsb = payload[1];
+
+  int ppm_value = (msb << 8) + lsb;
+
+  // Set target PPM
+  if ((!T66_set_calibration_target(&CO2_internal, ppm_value, &error_code)) || (!T66_set_calibration_target(&CO2_external, ppm_value, &error_code))) {
+    return false;
+  }
+  delay(1000);
+
+  digitalWrite(LED_BUILTIN, HIGH);
+
+  // Verify that target was set in sensors
+  if ((!T66_verify_calibration_target(&CO2_internal, ppm_value, &error_code)) || (!T66_verify_calibration_target(&CO2_external, ppm_value, &error_code))) {
+    return false;
+  }
+  delay(1000);
+  
+  // Start calibration
+  if ((!T66_start_calibration(&CO2_internal, &error_code)) || (!T66_start_calibration(&CO2_external, &error_code))) {
+    return false;
+  }
+  delay(1000);
+
+  // Wait until both sensors are done calibrating
+  while ((T66_has_status(&CO2_internal, CALIBRATION_FLAG)) || (T66_has_status(&CO2_external, CALIBRATION_FLAG))) delay(50);
+
+  digitalWrite(LED_BUILTIN, LOW);
+
+  return true;
+}
+

@@ -17,6 +17,7 @@ FAN_EXT         = 0x04 # 0b00000100
 SERVOS          = 0x05 # 0b00000101
 LED             = 0x06 # 0b00000110
 CO2_EXT         = 0x07 # 0b00000111
+CO2_CALIBRATE   = 0x08 # 0b00001000
 
 DAMPERS_CLOSED  = 0
 DAMPERS_OPEN    = 1
@@ -48,9 +49,10 @@ class Arduino:
         self.co2_ext_ppm = 0
 
 
+        # TODO: try single point calibtration, and this manual calibration may be unnecessary
         # Error margins derived from measurements with a handheld CO2 sensor (Testo 535)
-        self.internal_co2_error_correction = -145   # (between -140 and -130 @ 430-450 ppm)
-        self.external_co2_error_correction = 55     # (between 45 - 65 @ 470-480 ppm)
+        # self.internal_co2_error_correction = -145   # (between -140 and -130 @ 430-450 ppm)
+        # self.external_co2_error_correction = 55     # (between 45 - 65 @ 470-480 ppm)
 
 
         self.error = ''
@@ -59,17 +61,21 @@ class Arduino:
         '''
             Sends an instruction to change an actuator/LED via the Arduino
             followed by which value to set.
+
+            v should be a list of bytes, larger values must be split into byte sized elements
         '''
         com = self.make_command(t, v)
         print "sending command:", [hex(b) for b in com]
         self.flush_rcv_buf()
         self.serial.write(com)
         ack = t
-        err = ~t
+        err = t ^ 0xFF
 
         response = self.receive_uint8()
         if (response == ack):
             print "ACK received from Arduino"
+        elif (response == err):
+            self.handle_error(response)
         else:
             print "invalid ACK! mismatching response and ack", hex(response), hex(ack)
 
@@ -92,7 +98,7 @@ class Arduino:
         response = self.receive_uint8() # Get the ack or error
 
         ack = t
-        err = ~t
+        err = t ^ 0xFF
 
         if response == ack:
             value = self.receive_float()
@@ -104,15 +110,16 @@ class Arduino:
 
             print t, value
             if t == CO2:
-                self.co2_ppm = value + self.internal_co2_error_correction
+                self.co2_ppm = value #+ self.internal_co2_error_correction
             elif t == HUMIDITY:
                 self.humidity = value
             elif t == TEMPERATURE:
                 self.temperature = value
             elif t == CO2_EXT:
-                self.co2_ext_ppm = value + self.external_co2_error_correction
+                self.co2_ext_ppm = value #+ self.external_co2_error_correction
 
         elif response == err:
+            self.handle_error(error)
             time.sleep(0.2) # Wait a moment in case the microcontroller is backed up
             self.request(t, retries-1)
         else:
@@ -187,6 +194,12 @@ class Arduino:
         cs %= 0x100
         return cs
 
+    def handle_error(self, error):
+        error_code = self.receive_uint8()
+        print "error", hex(error)
+        print "code:", hex(error_code)
+
+
     def receive_float(self):
         '''
             Expects to receive 4 bytes from the arduino.
@@ -222,11 +235,12 @@ class Arduino:
         response = self.receive_uint8()
 
         ack = t
-        err = ~t
+        err = t ^ 0xFF
 
         if response == ack:
             return self.receive_float()
         elif response == err:
+            self.handle_error(response)
             time.sleep(0.2)
             read_val(t, retries-1)
         else:

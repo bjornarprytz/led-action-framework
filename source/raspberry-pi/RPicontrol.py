@@ -259,6 +259,18 @@ class PlantEnvironmentControl:
             blue = int(raw_input("blue: (0-255)"))
             blue = self.clamp(blue, 0, 255)
             self.arduino.command(LED, [red, white, blue])
+        if control == "6":
+            print "Calibrate to single point:"
+            cmd = raw_input("PPM (q to abort)")
+            if cmd == 'q':
+                print 'aborted'
+                return
+            ppm = int(cmd)
+
+            msb = (ppm % 0x10000) >> 8
+            lsb = ppm % 0x100
+            print "msb: ",hex(msb), "lsb:", hex(lsb)
+            self.arduino.command(CO2_CALIBRATE, [msb, lsb])
 
     def clamp(self, val, mn, mx):
         '''
