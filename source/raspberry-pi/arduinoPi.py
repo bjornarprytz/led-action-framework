@@ -36,7 +36,7 @@ class Arduino:
             parity=s.PARITY_NONE,
             stopbits=s.STOPBITS_ONE,
             bytesize=s.EIGHTBITS,
-            timeout=5
+            timeout=20
         )
 
 

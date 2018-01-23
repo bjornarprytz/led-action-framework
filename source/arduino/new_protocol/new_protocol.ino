@@ -114,14 +114,14 @@ void update_data(unsigned long currentMillis) {
   byte h_t_rsp[TEMP_HUM_RSP_SIZE]; // To hold humidity/temperature readings
   
   if (currentMillis - previousMillis > interval) {
-    //digitalWrite(LED_BUILTIN, HIGH);
+    digitalWrite(LED_BUILTIN, HIGH);
     hum_temp_reading(HUM_TEMP_ADDRESS, (char*)&h_t_rsp);
     humidity = get_hum_from_reading((char*)&h_t_rsp);
     temperature = get_temp_from_reading((char*)&h_t_rsp);
-    co2_ppm = CO2_reading(&CO2_internal, 1000);  // Spend at most 1 second here
-    co2_ext_ppm = CO2_reading(&CO2_external, 1000); // Spend at most 1 second here
+    co2_ppm = CO2_reading(&CO2_internal, &error_code);
+    co2_ext_ppm = CO2_reading(&CO2_external, &error_code);
     previousMillis = currentMillis;
-    //digitalWrite(LED_BUILTIN, LOW);
+    digitalWrite(LED_BUILTIN, LOW);
   }
 }
 
@@ -148,19 +148,15 @@ void handle_instruction(byte instruction, byte* payload, unsigned int pl_size) {
   
   if (instruction == TEMPERATURE) {
     RPi_send_float(TEMPERATURE, temperature);
-    
   } else if (instruction == HUMIDITY) {
     RPi_send_float(HUMIDITY, humidity);
-    
   } else if (instruction == CO2) {
     RPi_send_float(CO2, co2_ppm);
-    
   } else if (instruction == FAN_INT) {
     if (set_internal_fan_speed(payload, pl_size))
       send_ack(instruction);
     else
       send_error(instruction);
-      
   } else if (instruction == FAN_EXT) {
     if (set_external_fan_speed(payload, pl_size))
       send_ack(instruction);
@@ -171,7 +167,6 @@ void handle_instruction(byte instruction, byte* payload, unsigned int pl_size) {
       send_ack(instruction);
     else
       send_error(instruction);
-      
   } else if (instruction == LED) {
     if (set_LED(payload, pl_size)) 
       send_ack(instruction);
@@ -301,36 +296,36 @@ bool CO2_calibrate(byte* payload, unsigned int pl_size) {
   if (pl_size != 2)
     return false;
 
-  digitalWrite(LED_BUILTIN, LOW);
   int msb = payload[0];
   int lsb = payload[1];
 
   int ppm_value = (msb << 8) + lsb;
 
+  if ((!T66_ABC_logic_off(&CO2_internal, &error_code)) || (!T66_ABC_logic_off(&CO2_external, &error_code))) {
+    return false;
+  }
+  delay(100);
+
   // Set target PPM
   if ((!T66_set_calibration_target(&CO2_internal, ppm_value, &error_code)) || (!T66_set_calibration_target(&CO2_external, ppm_value, &error_code))) {
     return false;
   }
-  delay(1000);
-
-  digitalWrite(LED_BUILTIN, HIGH);
+  delay(100);
 
   // Verify that target was set in sensors
   if ((!T66_verify_calibration_target(&CO2_internal, ppm_value, &error_code)) || (!T66_verify_calibration_target(&CO2_external, ppm_value, &error_code))) {
     return false;
   }
-  delay(1000);
+  delay(100);
   
   // Start calibration
   if ((!T66_start_calibration(&CO2_internal, &error_code)) || (!T66_start_calibration(&CO2_external, &error_code))) {
     return false;
   }
-  delay(1000);
+  delay(100);
 
   // Wait until both sensors are done calibrating
   while ((T66_has_status(&CO2_internal, CALIBRATION_FLAG)) || (T66_has_status(&CO2_external, CALIBRATION_FLAG))) delay(50);
-
-  digitalWrite(LED_BUILTIN, LOW);
 
   return true;
 }
