@@ -18,11 +18,15 @@ SERVOS          = 0x05 # 0b00000101
 LED             = 0x06 # 0b00000110
 CO2_EXT         = 0x07 # 0b00000111
 CO2_CALIBRATE   = 0x08 # 0b00001000
+CO2_WARMUP      = 0x09 # 0b00001001
+
+SENSORS_UNAVAILABLE = 0xEE
 
 DAMPERS_CLOSED  = 0
 DAMPERS_OPEN    = 1
 
 FLOAT_ERROR     = -1
+BAD_VALUE       = -200 # Outside the range of all sensors
 
 class Arduino:
     def __init__(self, serial_port):
@@ -47,6 +51,7 @@ class Arduino:
         self.humidity = 0
         self.co2_ppm = 0
         self.co2_ext_ppm = 0
+        self.dirty_data = True
 
 
         # TODO: try single point calibtration, and this manual calibration may be unnecessary
@@ -82,6 +87,17 @@ class Arduino:
     def flush_rcv_buf(self):
         self.serial.reset_input_buffer() # Flush input buffer, discarding all its contents
 
+    def corrupt(self,):
+        if self.co2_ppm == BAD_VALUE:
+            return True
+        if self.co2_ext_ppm == BAD_VALUE:
+            return True
+        if self.humidity == BAD_VALUE:
+            return True
+        if self.temperature == BAD_VALUE:
+            return True
+
+        return False
 
     def request(self, t, retries=3):
         '''
@@ -107,23 +123,26 @@ class Arduino:
                 self.flush_rcv_buf() # Flush buffer in case there is a synchronization error
                 self.request(t, retries-1)
                 return
-
             print t, value
-            if t == CO2:
-                self.co2_ppm = value #+ self.internal_co2_error_correction
-            elif t == HUMIDITY:
-                self.humidity = value
-            elif t == TEMPERATURE:
-                self.temperature = value
-            elif t == CO2_EXT:
-                self.co2_ext_ppm = value #+ self.external_co2_error_correction
 
         elif response == err:
-            self.handle_error(error)
-            time.sleep(0.2) # Wait a moment in case the microcontroller is backed up
-            self.request(t, retries-1)
+            self.handle_error(response)
+            value = BAD_VALUE
         else:
             self.error = 'response neither ACK, nor ERROR (', t, '+ ',response,')'
+            return
+
+        self.set_value(t, value)
+
+    def set_value(self, t, val):
+        if t == CO2:
+            self.co2_ppm = val #+ self.internal_co2_error_correction
+        elif t == HUMIDITY:
+            self.humidity = val
+        elif t == TEMPERATURE:
+            self.temperature = val
+        elif t == CO2_EXT:
+            self.co2_ext_ppm = val #+ self.external_co2_error_correction
 
     def update(self, types=[TEMPERATURE, HUMIDITY, CO2, CO2_EXT]):
         '''

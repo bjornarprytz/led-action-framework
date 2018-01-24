@@ -58,7 +58,7 @@ let line_composite_co2_day = {
 		// "formatted": ["₹ 0.00", "₹ 0.00", "₹ 0.00", "₹ 61,500.00", "₹ 82,936.88", "₹ 24,010.00", "₹ 0.00", "₹ 0.00", "₹ 25,840.00", "₹ 5,08,048.82", "₹ 1,16,820.00", "₹ 0.00"],
 		},
 		{
-			"title": "CO2",
+			"title": "External CO2",
 			"color": color_co2_ext,
 			"values": co2_ext_day[0]['values'],
 		},

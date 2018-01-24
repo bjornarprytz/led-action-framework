@@ -4,7 +4,8 @@ import time
 
 if __name__ == "__main__":
     update_interval = 10 # seconds
-    now = last_update = datetime.datetime.now()
+    warmup_interval = 60 # minutes
+    now = last_update = last_warmup = datetime.datetime.now()
 
     interval_length = 300 # seconds
 
@@ -25,5 +26,10 @@ if __name__ == "__main__":
             handler.update()
             handler.log(experiment_id)
             last_update = datetime.datetime.now()
+
+        if now - last_warmup >= datetime.timedelta(minutes=warmup_interval):
+            print "Initiating warm-up (reset):", now
+            handler.reset()
+            last_warmup = datetime.datetime.now()
 
         time.sleep(1) # not to take up too much CPU time

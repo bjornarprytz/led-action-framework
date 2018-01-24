@@ -216,6 +216,10 @@ class PlantEnvironmentControl:
             print "database already has this reading logged"
             return
 
+        if self.arduino.corrupt():
+            print "data is corrupt (should be temporary)"
+            return
+
         print self.arduino.time_stamp, self.arduino.temperature, self.arduino.humidity, self.arduino.co2_ppm, self.arduino.co2_ext_ppm
         self.db.insert_readings((self.arduino.time_stamp, self.arduino.temperature, self.arduino.humidity, self.arduino.co2_ppm, self.arduino.co2_ext_ppm, interval_id))
 
@@ -228,6 +232,9 @@ class PlantEnvironmentControl:
 
         self.arduino.update()
         self.db_up_to_date = False
+
+    def reset_sensors(self):
+        self.arduino.command(CO2_WARMUP, [])
 
     def control(self, control):
         '''
@@ -271,6 +278,12 @@ class PlantEnvironmentControl:
             lsb = ppm % 0x100
             print "msb: ",hex(msb), "lsb:", hex(lsb)
             self.arduino.command(CO2_CALIBRATE, [msb, lsb])
+
+        if control == "7":
+            ans = raw_input("Print about to start warmup. You sure? (y/n)")
+
+            if ans == "y":
+                self.arduino.command(CO2_WARMUP, [])
 
     def clamp(self, val, mn, mx):
         '''

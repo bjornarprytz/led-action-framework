@@ -39,6 +39,10 @@ SoftwareSerial DamperServos(SERVO_Rx_PIN, SERVO_Tx_PIN);
 // Raspberry Pi Communication
 #define RPi_BAUD 9600
 
+#define SENSORS_UNAVAILABLE 0xEE
+#define PAYLOAD_SIZE_ERROR 0xDE
+#define UNDEFINED 0x00
+
 // Handshake masks
 const byte CONTROL_MASK = 0xF0; // 1010xxxx indicates a handshake byte
 const byte SIZE_MASK    = 0x0F; // xxxx1111 contains the number of bytes following the header
@@ -46,15 +50,16 @@ const byte SIZE_MASK    = 0x0F; // xxxx1111 contains the number of bytes followi
 const byte HEADER_FLAG  = 0B10100000;
 
 // instruction description
-const byte TEMPERATURE  = 0x00;
-const byte HUMIDITY     = 0x01;
-const byte CO2          = 0x02;
-const byte FAN_INT      = 0x03;
-const byte FAN_EXT      = 0x04;
-const byte SERVOS       = 0x05;
-const byte LED          = 0x06;
-const byte CO2_EXT      = 0x07;
-const byte CO2_CALIBRATE= 0x08;
+const byte TEMPERATURE      = 0x00;
+const byte HUMIDITY         = 0x01;
+const byte CO2              = 0x02;
+const byte FAN_INT          = 0x03;
+const byte FAN_EXT          = 0x04;
+const byte SERVOS           = 0x05;
+const byte LED              = 0x06;
+const byte CO2_EXT          = 0x07;
+const byte CO2_CALIBRATE    = 0x08;
+const byte CO2_WARMUP       = 0x09;
 
 
 const byte DAMPERS_CLOSED  = 0;
@@ -67,6 +72,7 @@ const byte BLUE = 2;
 // For output:
 float temperature = 0.0;
 float humidity = 0.0;
+bool co2_available = false;
 float co2_ppm = 0.0;
 float co2_ext_ppm = 13.37;
 byte LED_red   = 0;
@@ -95,9 +101,10 @@ void setup() {
   hum_temp_init();                
   CO2_internal.begin(T66_BAUD);     // Opens virtual serial port with the internal CO2 Sensor
   CO2_external.begin(T66_BAUD);     // Opens virtual serial port with the external CO2 Sensor
-  
   DamperServos.begin(SERVO_BAUD);
-
+  T66_start_warmup(&CO2_internal, &error_code);
+  T66_start_warmup(&CO2_external, &error_code);
+  
   // for debug
   digitalWrite(LED_BUILTIN, LOW);
 }
@@ -118,8 +125,15 @@ void update_data(unsigned long currentMillis) {
     hum_temp_reading(HUM_TEMP_ADDRESS, (char*)&h_t_rsp);
     humidity = get_hum_from_reading((char*)&h_t_rsp);
     temperature = get_temp_from_reading((char*)&h_t_rsp);
-    co2_ppm = CO2_reading(&CO2_internal, &error_code);
-    co2_ext_ppm = CO2_reading(&CO2_external, &error_code);
+    if (ready_for_requests()) {
+      co2_available = true;
+      co2_ppm = T66_CO2_reading(&CO2_internal, &error_code);
+      co2_ext_ppm = T66_CO2_reading(&CO2_external, &error_code);
+    } else {
+      co2_available = false;
+      co2_ppm = co2_ext_ppm = -1; 
+    }
+    
     previousMillis = currentMillis;
     digitalWrite(LED_BUILTIN, LOW);
   }
@@ -135,10 +149,10 @@ void listen_for_handshake() {
 }
 
 bool ready_for_requests() {
-  if (T66_has_status(&CO2_internal, WARM_UP_FLAG)) {
+  if (T66_has_status(&CO2_internal, WARM_UP_FLAG, &error_code)) {
     return false; 
   }
-  if (T66_has_status(&CO2_external, WARM_UP_FLAG)) {
+  if (T66_has_status(&CO2_external, WARM_UP_FLAG, &error_code)) {
     return false;
   }
   return true;
@@ -151,7 +165,11 @@ void handle_instruction(byte instruction, byte* payload, unsigned int pl_size) {
   } else if (instruction == HUMIDITY) {
     RPi_send_float(HUMIDITY, humidity);
   } else if (instruction == CO2) {
-    RPi_send_float(CO2, co2_ppm);
+    if (co2_available) RPi_send_float(CO2, co2_ppm);
+    else {
+      error_code = SENSORS_UNAVAILABLE;
+      send_error(instruction);
+    }
   } else if (instruction == FAN_INT) {
     if (set_internal_fan_speed(payload, pl_size))
       send_ack(instruction);
@@ -173,13 +191,23 @@ void handle_instruction(byte instruction, byte* payload, unsigned int pl_size) {
     else 
       send_error(instruction);
   } else if (instruction == CO2_EXT) {
-    RPi_send_float(CO2_EXT, co2_ext_ppm);
+    if (co2_available) RPi_send_float(CO2_EXT, co2_ext_ppm);
+    else {
+      error_code = SENSORS_UNAVAILABLE;
+      send_error(instruction);
+    }
   } else if (instruction == CO2_CALIBRATE) {
     if (CO2_calibrate(payload, pl_size))
       send_ack(instruction);
     else
       send_error(instruction);
-  }
+  } else if (instruction == CO2_WARMUP) {
+    // Start warmup of CO2 sensors
+    if (CO2_warm_up(payload, pl_size))
+      send_ack(instruction);
+    else
+      send_error(instruction);
+  } 
 }
 
 void validate_and_handle_msg(byte header) {
@@ -227,7 +255,7 @@ void send_error(byte packet)
 {
   Serial.write(~packet); // Return a negated instruction to signify an error
   Serial.write(error_code);
-  error_code = 0;
+  error_code = UNDEFINED;
 }
 
 bool is_valid_header(byte packet) {
@@ -293,8 +321,10 @@ bool set_LED(byte* payload, unsigned int pl_size) {
 bool CO2_calibrate(byte* payload, unsigned int pl_size) {
   // Start calibrating both CO2 sensors at the same time. Wait for the sensors to finish internal calibration
   // before returning true or false, depending on the result.
-  if (pl_size != 2)
+  if (pl_size != 2) {
+    error_code = PAYLOAD_SIZE_ERROR;
     return false;
+  }
 
   int msb = payload[0];
   int lsb = payload[1];
@@ -325,8 +355,24 @@ bool CO2_calibrate(byte* payload, unsigned int pl_size) {
   delay(100);
 
   // Wait until both sensors are done calibrating
-  while ((T66_has_status(&CO2_internal, CALIBRATION_FLAG)) || (T66_has_status(&CO2_external, CALIBRATION_FLAG))) delay(50);
+  while ((T66_has_status(&CO2_internal, CALIBRATION_FLAG, &error_code)) || (T66_has_status(&CO2_external, CALIBRATION_FLAG, &error_code))) delay(50);
 
   return true;
 }
+
+bool CO2_warm_up(byte* payload, unsigned int pl_size) {
+  if (pl_size > 0) {
+    error_code = PAYLOAD_SIZE_ERROR;
+    return false;
+  }
+
+  if ((!T66_start_warmup(&CO2_internal, &error_code)) || (!T66_start_warmup(&CO2_external, &error_code))) {
+    return false;
+  }
+
+  return true;
+}
+
+
+
 
