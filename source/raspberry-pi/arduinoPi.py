@@ -54,6 +54,7 @@ class Arduino:
         self.dirty_data = True
 
 
+
         # TODO: try single point calibtration, and this manual calibration may be unnecessary
         # Error margins derived from measurements with a handheld CO2 sensor (Testo 535)
         # self.internal_co2_error_correction = -145   # (between -140 and -130 @ 430-450 ppm)
@@ -152,6 +153,9 @@ class Arduino:
         for t in types:
             self.request(t)
         self.time_stamp = datetime.datetime.now()
+
+
+
 
     def make_command(self, t, v):
         '''
