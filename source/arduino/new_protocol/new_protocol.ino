@@ -27,8 +27,6 @@
 
 // Virtual Serial Port
 SoftwareSerial CO2_internal(T66_1_Rx_PIN, T66_1_Tx_PIN);
-
-
 SoftwareSerial CO2_external(T66_2_Rx_PIN, T66_2_Tx_PIN);
 
 
@@ -84,7 +82,7 @@ byte error_code = 0; // Default
 
 // State Machine
 unsigned long previousMillis = 0;
-unsigned long interval = 4000; // 2 seconds between each reading
+unsigned long interval = 10000; // 10 seconds between each reading
 
 // Fan Test
 unsigned long prevLEDMillis = 0;
@@ -114,7 +112,7 @@ void loop() {
   
   listen_for_handshake();
 
-  update_data(currentMillis);  
+  update_data(currentMillis);
 }
 
 void update_data(unsigned long currentMillis) {
@@ -131,9 +129,8 @@ void update_data(unsigned long currentMillis) {
       co2_ext_ppm = T66_CO2_reading(&CO2_external, &error_code);
     } else {
       co2_available = false;
-      co2_ppm = co2_ext_ppm = -1; 
+      co2_ppm = co2_ext_ppm = -1;
     }
-    
     previousMillis = currentMillis;
     digitalWrite(LED_BUILTIN, LOW);
   }

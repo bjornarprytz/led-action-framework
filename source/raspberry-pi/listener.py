@@ -3,7 +3,7 @@ import RPicontrol
 import time
 
 if __name__ == "__main__":
-    update_interval = 10 # seconds
+    update_interval = 40 # seconds
     warmup_interval = 10 # minutes
     now = last_update = last_warmup = datetime.datetime.now()
 

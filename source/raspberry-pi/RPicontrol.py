@@ -197,14 +197,14 @@ class PlantEnvironmentControl:
     def seconds_passed_since(self, start):
         return (datetime.datetime.now() - start).seconds
 
-    def wait_and_read(self, interval_id, length, read_frequency=10):
+    def wait_and_read(self, interval_id, length, read_frequency=10, auto_reset=True):
         '''
             Wait for the input length (seconds) of time and do periodic readings in the meantime
         '''
         start = datetime.datetime.now()
 
         while self.seconds_passed_since(start) < length:
-            self.update()
+            self.update(auto_reset)
             self.log(interval_id)
             time.sleep(read_frequency)
 

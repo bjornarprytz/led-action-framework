@@ -7,6 +7,7 @@ import json
 import datetime
 import os.path
 import database
+import numpy as np
 from pprint import pprint
 
 db_name = "plantdb"
@@ -133,7 +134,7 @@ def log_days(start, num_days=7):
             json['co2'][d]['values'][h] = co2
             json['co2_ext'][d]['values'][h] = co2_ext
 
-    # Write the JSON to files: 'static/assets/temp_days.json' etc.
+    # Write the JSON to files: 'Startic/assets/temp_days.json' etc.
     for param in params:
         days_path = dst_folder+param+days_postfix
         write_json(days_path, json[param])
@@ -187,25 +188,28 @@ def plot_experiment(title, filename):
     readings_by_interval = db.get_readings_from_experiment_by_interval(title)
     # print readings_by_interval
 
-    timeline = []
     co2_by_interval = []
     hum_by_interval = []
     temp_by_interval = []
+    co2_ext_by_interval = []
     for interval in readings_by_interval:
         if len(interval) < 1:
             continue
         temp = []
         hum = []
         co2 = []
+        co2_ext = []
         for reading in interval:
+            print reading[0]
             temp.append(reading[1])
             hum.append(reading[2])
-            co2.append(reading[4] - reading[3])  # Rate of CO2 consumption
+            co2.append(reading[3])  # Rate of CO2 consumption
+            co2_ext.append(reading[4])
 
         co2_by_interval.append(co2)
         hum_by_interval.append(hum)
         temp_by_interval.append(temp)
-
+        co2_ext_by_interval.append(co2_ext)
 
     time = range(len(interval))
     colors = get_colors(len(readings_by_interval))
@@ -218,7 +222,7 @@ def plot_experiment(title, filename):
         print 'could not extract normalization_time from database'
 
     co2_axis = plt.subplot(211)
-    co2_axis.axis([time[0], time[-1], 300, 800])
+    co2_axis.axis([time[0], time[-1], 300, 750])
     plt.title(str(len(readings_by_interval))+' intervals with identical system settings')
     plt.setp(co2_axis.get_xticklabels(), visible=False) # Hide the x-axis values
     plt.ylabel('CO2 delta')
@@ -227,6 +231,11 @@ def plot_experiment(title, filename):
     i=0
     for co2_series in co2_by_interval:
         plt.plot(co2_series, '.-', color=colors['r'][i])
+        i+=1
+
+    i = 0
+    for co2_ext_series in co2_ext_by_interval:
+        plt.plot(co2_ext_series,  color=colors['g'][i])
         i+=1
 
     hum_axis = plt.subplot(413, sharex=co2_axis)
@@ -241,7 +250,7 @@ def plot_experiment(title, filename):
         i+=1
 
     temp_axis = plt.subplot(414, sharex=co2_axis)
-    temp_axis.axis([time[0], time[-1], 10, 35])
+    temp_axis.axis([time[0], time[-1], 18, 32])
     plt.ylabel('Temperature (C)')
     plt.xlabel('Time (minutes)')
     plt.axvline(normalization_time)
@@ -252,6 +261,67 @@ def plot_experiment(title, filename):
         i+=1
 
     plt.savefig(fig_folder+filename)
+
+
+
+
+def get_time_stamp(reading):
+    return int(reading[0][-5:-3])*60 + int(reading[0][-2:])
+
+def plot_experiment_mean(title, filename):
+    '''
+        Plot internal against external CO2. Collect data from multiple consecutive intervals. Plot the
+        mean and the variance (box plot)
+    '''
+    db = database.db(db_name)
+
+    readings_by_interval = db.get_readings_from_experiment_by_interval(title)
+
+
+    # All intervals are supposed to be of the same length, but some may lack data, because of anomalous readings
+    longest_interval = 0
+    for interval in readings_by_interval:
+        interval_length = len(interval)
+        if interval_length > longest_interval:
+            longest_interval = interval_length
+
+    co2_timeline = []
+    co2_ext_timeline = []
+
+    for i in range (longest_interval):
+        co2_timeline.append([])         # List of lists
+        co2_ext_timeline.append([])
+
+    co2_by_interval = []
+    co2_ext_by_interval = []
+    for interval in readings_by_interval:
+        if len(interval) < 1:
+            continue
+        temp = []
+        hum = []
+        co2 = []
+        co2_ext = []
+        base = get_time_stamp(interval[0]) # Time stamp to anchor all the readings to
+        for i in range(len(interval)):
+            # NOTE: this indexing can go wrong if all intervals are missing readings in the same exact timeslot
+            t = get_time_stamp(interval[i]) - base
+            print t
+            co2_timeline[t].append(interval[i][3])
+            co2_ext_timeline[t].append(interval[i][4])
+
+    y_co2 = []  # hold means of each timeslot
+    y_co2_ext = []
+    y_co2_error = []
+    for timeslot in co2_timeline:
+        y_co2.append(np.mean(timeslot))
+        y_co2_error.append(np.std(timeslot))
+    for timeslot in co2_ext_timeline:
+        y_co2_ext.append(np.mean(timeslot))
+
+
+    plt.plot(range(longest_interval), y_co2_ext)
+    plt.errorbar(range(longest_interval), y_co2, yerr=y_co2_error)
+    plt.show()
 
 
     # Title - Date
@@ -336,4 +406,4 @@ if __name__ == "__main__":
     #now = datetime.datetime.now()
     #log_hours(now)
     #log_days(now)
-    plot_experiment('baseline_160113', 'testfig')
+    plot_experiment_mean('baseline_260109', 'testfig')
