@@ -11,7 +11,7 @@ FANS_HIGH = 0x80
 FANS_FULL = 0xFF
 
 class PlantEnvironmentControl:
-    def __init__(self, db_name='plantdb', port_list=['/dev/ttyACM0', '/dev/ttyACM1'], grace=3):
+    def __init__(self, db_name='plantdb', port_list=['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyACM2'], grace=3):
         '''
             Initialise the Arduino interface, and connect to a database to store
             the readings.
@@ -30,8 +30,6 @@ class PlantEnvironmentControl:
         self.db = database.db(db_name)
         self.db.init_db()
         self.db_up_to_date = False
-        self.auto_reset_threshold = 750 # If CO2 gets above these levels, reset the CO2 sensors
-        self.anomalous_data = False
 
         print "Grace period for Arduino (",grace," seconds)"
         for _ in range(grace):
@@ -139,7 +137,7 @@ class PlantEnvironmentControl:
         print 'Open dampers and max all fans'
         self.arduino.command(SERVOS, [DAMPERS_OPEN])
         self.arduino.command(FAN_EXT, [FANS_FULL])
-        self.arduino.command(LED, [64,64,64])
+        self.arduino.command(LED, [0,0,0])
 
         # TAKE MEASUREMENT OF CARBON DIOXIDE
         # print 'MEASURE CO2'
@@ -171,7 +169,7 @@ class PlantEnvironmentControl:
 
         return
 
-    def run_interval(self, interval_id, red, white, blue, length, auto_reset=True):
+    def run_interval(self, interval_id, red, white, blue, length):
         '''
             Intervals Phases:
                 1: Adjust LED channels, measure CO2
@@ -191,20 +189,20 @@ class PlantEnvironmentControl:
         # Wait for a while and take readings
         self.wait_and_read(interval_id, length) # loop
         # Do one last reading, just to be safe
-        self.update(auto_reset)
+        self.update()
         self.log(interval_id)
 
     def seconds_passed_since(self, start):
         return (datetime.datetime.now() - start).seconds
 
-    def wait_and_read(self, interval_id, length, read_frequency=10, auto_reset=True):
+    def wait_and_read(self, interval_id, length, read_frequency=10):
         '''
             Wait for the input length (seconds) of time and do periodic readings in the meantime
         '''
         start = datetime.datetime.now()
 
         while self.seconds_passed_since(start) < length:
-            self.update(auto_reset)
+            self.update()
             self.log(interval_id)
             time.sleep(read_frequency)
 
@@ -222,28 +220,18 @@ class PlantEnvironmentControl:
             print "data is corrupt (should be temporary)"
             return
 
-        if self.anomalous_data:
-            print "Data of previous reading was anomalous"
-            return
-
         print self.arduino.time_stamp, self.arduino.temperature, self.arduino.humidity, self.arduino.co2_ppm, self.arduino.co2_ext_ppm
         self.db.insert_readings((self.arduino.time_stamp, self.arduino.temperature, self.arduino.humidity, self.arduino.co2_ppm, self.arduino.co2_ext_ppm, interval_id))
 
         self.db_up_to_date = True
 
-    def update(self, auto_reset=False):
+    def update(self):
         '''
             Requests a status  update from the Arduino.
         '''
 
         self.arduino.update()
         self.db_up_to_date = False
-        self.anomalous_data = False
-
-        if auto_reset == True:
-            if ((self.arduino.co2_ext_ppm > self.auto_reset_threshold) or (self.arduino.co2_ppm > self.auto_reset_threshold)):
-                self.reset_sensors()
-                self.anomalous_data = True
 
     def reset_sensors(self):
         print "Initiating warm-up (reset):"

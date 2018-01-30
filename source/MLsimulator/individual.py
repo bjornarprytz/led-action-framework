@@ -338,7 +338,7 @@ if __name__ == "__main__":
     b = quantum_yield.blu_LED
     r = quantum_yield.red_LED
     pr = quantum_yield.radish_PAR
-    energy_allowance = 8
+    energy_allowance = 5.2
     I = Individual(w, r, b, energy_allowance, weights={'a' : 0.5, 'b' : 0.5, 'c' : 0.5})
 
     print I.hc_get_iterations(pr, 0.00001, step=0.1)

@@ -23,7 +23,7 @@ if __name__ == "__main__":
         now = datetime.datetime.now()
         if now - last_update >= datetime.timedelta(seconds=update_interval):
             print "updating(and logging): ", now
-            handler.update(auto_reset=True)
+            handler.update()
             handler.log(experiment_id)
             last_update = datetime.datetime.now()
 
