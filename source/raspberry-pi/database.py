@@ -235,6 +235,23 @@ class db:
 
         return self.execute_SQL(SQL, values)
 
+    def get_experiment_initial_settings(self, title):
+
+        SQL =   '''
+                SELECT red_led, white_led, blue_led
+                FROM    (SELECT MIN(id), white_led, red_led, blue_led
+                        FROM intervals
+                        WHERE experiment_id=(SELECT id
+                                            FROM experiments
+                                            WHERE title=?
+                                            )
+                        )
+                '''
+
+        values = (title, )
+
+        return self.execute_SQL(SQL, values)
+
     def print_experiment(self, experiment_title):
         '''
             Prints the parameters and results of an experiment

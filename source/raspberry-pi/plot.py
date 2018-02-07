@@ -8,6 +8,7 @@ import datetime
 import os.path
 import database
 import numpy as np
+import sys
 from pprint import pprint
 
 db_name = "plantdb"
@@ -268,7 +269,7 @@ def plot_experiment(title, filename):
 def get_time_stamp(reading):
     return int(reading[0][-5:-3])*60 + int(reading[0][-2:])
 
-def plot_experiment_mean(title, filename):
+def plot_experiment_mean(title):
     '''
         Plot internal against external CO2. Collect data from multiple consecutive intervals. Plot the
         mean and the variance (box plot)
@@ -277,6 +278,7 @@ def plot_experiment_mean(title, filename):
 
     readings_by_interval = db.get_readings_from_experiment_by_interval(title)
 
+    settings = db.get_experiment_initial_settings(title)[0]
 
     # All intervals are supposed to be of the same length, but some may lack data, because of anomalous readings
     longest_interval = 0
@@ -305,7 +307,7 @@ def plot_experiment_mean(title, filename):
         for i in range(len(interval)):
             # NOTE: this indexing can go wrong if all intervals are missing readings in the same exact timeslot
             t = get_time_stamp(interval[i]) - base
-            print t
+            # print t
             co2_timeline[t].append(interval[i][3])
             co2_ext_timeline[t].append(interval[i][4])
 
@@ -318,11 +320,27 @@ def plot_experiment_mean(title, filename):
     for timeslot in co2_ext_timeline:
         y_co2_ext.append(np.mean(timeslot))
 
+    fig, ax = plt.subplots()
 
-    plt.plot(range(longest_interval), y_co2_ext)
-    plt.errorbar(range(longest_interval), y_co2, yerr=y_co2_error)
-    plt.show()
+    ax.plot(range(longest_interval), y_co2_ext)
+    ax.errorbar(range(longest_interval), y_co2, yerr=y_co2_error)
 
+
+
+    ax.set_xlim([0, 25])
+    ax.set_ylim([300, 800])
+
+
+    plt.title('r:' + str(settings[0]) + ' w:' + str(settings[1]) + ' b:' + str(settings[2]))
+
+
+    filename = title+'_std_error'
+
+    print '1'
+
+    fig.savefig(fig_folder+filename)
+
+    print '2'
 
     # Title - Date
 
@@ -401,9 +419,22 @@ def plot_experiment_mean(title, filename):
 #         }
 #     '''
 
+def __parse_args():
+    if len(sys.argv) < 2:
+        print "Usage: python", sys.argv[0], "[experiment_title1, experiment_title2, ... experiment_titleN]"
+        exit()
+
+    titles = []
+    for title in sys.argv[1:]:
+        titles.append(title)
+
+    return titles
+
 if __name__ == "__main__":
     # make_plot()
     #now = datetime.datetime.now()
     #log_hours(now)
     #log_days(now)
-    plot_experiment_mean('baseline_260109', 'testfig')
+    titles = __parse_args()
+    for title in titles:
+        plot_experiment_mean(title)

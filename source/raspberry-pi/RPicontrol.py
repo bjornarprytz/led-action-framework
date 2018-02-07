@@ -46,6 +46,43 @@ class PlantEnvironmentControl:
                     return available_port
         return None
 
+    def run_search(self, title, description, interval_length, num_intervals, normalization_time, settings_to_search):
+        '''
+            Run the given number of intervals and note their fitness.
+        '''
+
+        start_time = datetime.datetime.now()
+
+        experiment_id = self.db.new_experiment(title, start_time, interval_length, description)
+
+        setting_scores = []
+        for s in range(len(settings_to_search)):
+            setting_scores.append([])
+
+        for i in range(num_intervals):
+            for setting, scores in zip(settings_to_search, setting_scores):
+                red = setting[0]
+                white = setting[1]
+                blue = setting[2]
+                interval_id = self.db.new_interval([red, white, blue, experiment_id])
+
+                self.normalize(interval_id, air_out_time=normalization_time, auto_stop=True)
+
+                ambient_co2 = self.arduino.co2_ppm
+
+                self.run_interval(interval_id, red, white, blue, interval_length)
+
+                score = ambient_co2 - self.arduino.co2_ppm
+
+                scores.append(score)
+        self.shut_down()
+
+        for setting, scores in zip(settings_to_search, setting_scores):
+            print setting
+            print scores
+
+
+
     def run_experiment(self, title, description, interval_length, num_intervals, normalization_time, seed_setting={'r':0xFF, 'w':0xFF, 'b':0xFF}):
         '''
             Run a full experiment cycle with a set number of intervals
@@ -63,8 +100,6 @@ class PlantEnvironmentControl:
             interval_id = self.db.new_interval([red, white, blue, experiment_id])
 
             self.normalize(interval_id, air_out_time=normalization_time)
-
-            # TODO: Insert search for new input vector
 
             self.run_interval(interval_id, red, white, blue, interval_length)
         self.shut_down()
@@ -117,7 +152,7 @@ class PlantEnvironmentControl:
         self.arduino.command(FAN_INT, [FANS_FULL])
         self.arduino.command(LED, [64,64,64])
 
-    def normalize(self, interval_id, air_out_time=20, delta_co2_threshold_ppm=10):
+    def normalize(self, interval_id, air_out_time=20, delta_co2_threshold_ppm=5, auto_stop=False):
         '''
             Open chamber and normalize the internal air by turning up fans
 
@@ -145,7 +180,25 @@ class PlantEnvironmentControl:
 
         # WAIT FOR AIRFRLOW TO GET GOING
         print 'Letting air flow for', air_out_time, 'seconds'
-        self.wait_and_read(interval_id, air_out_time)
+
+        length = air_out_time
+
+        while length > 0:
+
+            if length > 60:
+                self.wait_and_read(interval_id, 60)
+            else:
+                self.wait_and_read(interval_id, length)
+
+            delta_co2 = abs(self.arduino.co2_ppm - self.arduino.co2_ext_ppm)
+
+            if auto_stop and delta_co2 < delta_co2_threshold_ppm:
+                print "broke off normalization due to equilibrium between external and internal co2 levels"
+                break
+
+            length -= 60
+
+
 
         # KEEP AIRING OUT CHAMBER UNTIL DELTA CO2 IS LOW ENOUGH
         # new_co2 = self.arduino.read_val(CO2)
