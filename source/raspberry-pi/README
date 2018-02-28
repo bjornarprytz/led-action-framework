@@ -21,6 +21,8 @@ can post to.
 **** rpi_update.sh ****
 Copies the necessary files from this folder to the RaspberryPi with secure copy
 
+**** boot_script.sh ****
+Calls rpi_update.sh and mapport.sh.
 
 PYTHON
 
@@ -30,6 +32,9 @@ lists all the "active" Serial Ports on the device.
 **** listener.py ****
 periodically requests stats from the Arduino, and updates the database in 'db/'.
 It also calls functions from plot.py
+
+**** logger.py ****
+Creates JSON from the database periodically. JSON is used for the visual presentation.
 
 **** plot.py ****
 queries the database outputs aggregated data in json format to
@@ -47,3 +52,20 @@ as an API for the sensor data.
 **** server.py ****
 Serves HTML which presents JSON files containing the logged data from the Arduino
 and its sensors.
+
+**** database.py ****
+Contains code for initiating new databases, and querying them. Implemented with sqlite3
+
+**** day_night_cycle.py ****
+Adjusts LED lights gradually up to 25% intensity at 8 AM, and down again at 10 PM
+Meant to be run in the background like this:
+nohup python day_night_cycle.py > "cycle.log" 2>&1 &
+
+****
+run_continuous.py
+search_led.py
+run_batch.py
+****
+Runs parameterized experiments on the enclosure. These should only serve as examples, and new ones
+should be made for each specific experiment.
+
