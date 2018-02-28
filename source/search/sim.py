@@ -9,11 +9,6 @@ import individual as indi
 from quantum_yield import *
 
 
-
-
-# TODO: Dynamic Plotting seems to work, so fix actual learning.
-# Goal: Learn Faster. Take Bigger risks
-
 if __name__ == "__main__":
     rand.seed()
     w = np.array(wht_LED)

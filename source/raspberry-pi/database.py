@@ -170,6 +170,21 @@ class db:
                 '''
         return self.execute_SQL(SQL, values)
 
+    def get_readings_hour_no_co2_ext(self, hour):
+        '''
+            returns an average of temperature, humidity and co2,
+            over the given _hour_ grouped by minutes
+        '''
+        values = (hour,)
+
+        SQL =   '''
+                SELECT strftime('%H%M', collect_time), AVG(temperature), AVG(humidity), AVG(co2)
+                FROM readings
+                WHERE strftime('%Y-%m-%dT%H', collect_time)=?
+                GROUP BY strftime('%Y-%m-%dT%H:%M:00', collect_time)
+                '''
+        return self.execute_SQL(SQL, values)
+
     def get_readings_day(self, day):
         '''
             returns an average of temperature, humidity and co2,
@@ -201,6 +216,47 @@ class db:
                     (SELECT id
                     FROM experiments
                     WHERE title=?)
+                '''
+
+        interval_ids = self.execute_SQL(SQL, values)
+
+        intervals = []
+
+        SQL =   '''
+                SELECT strftime('%Y-%m-%dT%H:%M', collect_time), AVG(temperature), AVG(humidity), AVG(co2), AVG(co2_ext)
+                FROM readings
+                WHERE interval_id=?
+                GROUP BY strftime('%Y-%m-%dT%H:%M:00', collect_time)
+                '''
+
+        for interval_id in interval_ids:
+            values = (interval_id[0],)
+
+            readings = self.execute_SQL(SQL, values)
+
+            intervals.append(readings)
+
+        return intervals
+
+    def get_readings_from_experiment_by_setting_and_interval(self, title, red, white, blue):
+        '''
+            Returns a list of readings from an experiment that have a certain setting
+            the readings are grouped and averaged by minute
+        '''
+
+
+        values = (title, red, white, blue,)
+
+        SQL =   '''
+                SELECT id
+                FROM intervals
+                WHERE experiment_id IN
+                    (SELECT id
+                    FROM experiments
+                    WHERE title=?)
+                AND red_led=?
+                AND white_led=?
+                AND blue_led=?
                 '''
 
         interval_ids = self.execute_SQL(SQL, values)

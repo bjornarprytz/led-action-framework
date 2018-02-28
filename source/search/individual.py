@@ -16,7 +16,7 @@ class Individual:
     """
     An Individual with a set of three weights (a, b, c) as the genotype.
     """
-    def __init__(self, w, r, b, energy_allowance, weights={'a' : 0.5, 'b' : 0.5, 'c' : 0.5}):
+    def __init__(self, w, r, b, energy_allowance=total_wattage/2, weights={'a' : 0.5, 'b' : 0.5, 'c' : 0.5}):
         # w, r and b are arrays representing the documented
         # maximum output profiles for each channel.
         self.w = w
@@ -252,10 +252,10 @@ if __name__ == "__main__":
     b = quantum_yield.blu_LED
     r = quantum_yield.red_LED
     pr = quantum_yield.radish_PAR
-    energy_allowance = total_wattage / 2
+    energy_allowance = total_wattage
     I = Individual(w, r, b, energy_allowance, weights={'a' : 0.5, 'b' : 0.5, 'c' : 0.5})
 
-    print I.hc_get_iterations(pr, 0.00001, step=0.1)
+    # print I.hc_get_iterations(pr, 0.00001, step=0.1)
 
     print I.weights
     print 'reward:', I.reward_func(pr)

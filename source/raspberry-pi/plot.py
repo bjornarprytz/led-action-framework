@@ -322,31 +322,98 @@ def plot_experiment_mean(title):
 
     fig, ax = plt.subplots()
 
+
+    # box_data = np.concatenate((y_co2)
+
     ax.plot(range(longest_interval), y_co2_ext)
-    ax.errorbar(range(longest_interval), y_co2, yerr=y_co2_error)
-
-
+    ax.boxplot(co2_timeline, 0, '')  #y_co2, yerr=y_co2_error)
 
     ax.set_xlim([0, 25])
     ax.set_ylim([300, 800])
 
+    heading = 'r:' + str(settings[0]) + ' w:' + str(settings[1]) + ' b:' + str(settings[2])
 
-    plt.title('r:' + str(settings[0]) + ' w:' + str(settings[1]) + ' b:' + str(settings[2]))
 
 
-    filename = title+'_std_error'
+    plt.ylabel('CO2 ppm')
+    plt.xlabel('Minutes')
+    plt.title(heading)
 
-    print '1'
+    filename = heading+'_boxplot.pdf'
 
     fig.savefig(fig_folder+filename)
 
-    print '2'
+
+def plot_hours(start, num_hours=6):
+    '''
+    Return minute by minute readings from the last (6) hours (from now)
+    '''
+
+    if (num_hours < 1):
+        print "must have at least 1 hour to log"
+
+    db = database.db(db_name)
+
+    readings = []
+    recent = []
+    for h in reversed(range(num_hours)):
+        hour = (start - datetime.timedelta(hours=h)).strftime('%Y-%m-%dT%H')
+        recent.append(hour[-2:]) # The contents of this list will be used for labels in presentation
+        # Query DB
+        readings.append(db.get_readings_hour_no_co2_ext(hour)) # Gets the aggregate of readings each minute that hour
+    '''
+        readings= {
+            '%H' : [(0, temp, hum, co2, co2_ext) (1, temp, hum, co2, co2_ext), ... (59, temp, hum, co2, co2_ext)]
+            ... *num_hours
+        }
+    '''
+
+    json = {} # This will catalogue the readings by minutes, hours and parameter
+    for param in params:
+        json[param] = []
+        for h in range(num_hours):
+            json[param].append([0] * 60) # List to store the data
+
+    for h in range(num_hours): # For each hour..
+        for r in readings[h]:  # One reading per minute
+            m = int(r[0][-2:])   # Minute
+            temp = r[1]     # Temperature
+            hum = r[2]      # Humidity
+            co2 = r[3]      # Carbon-Dioxide
+            # co2_ext = r[4]  # External CO2
+
+            json['temp'][h][m] = temp
+            json['hum'][h][m] = hum
+            json['co2'][h][m] = co2
+            # json['co2_ext'][h][m] = co2_ext
+
+    y = []  # hold means of each timeslot
+    # y_co2_ext = []
+    y_error = []
+    for timeslot in json['hum']:
+        y.append(np.mean(timeslot))
+        y_error.append(np.std(timeslot))
+    # for timeslot in json['co2_ext']:
+        # y_co2_ext.append(np.mean(timeslot))
+
+    fig, ax = plt.subplots()
+
+    # ax.plot(range(num_hours), y_co2_ext)
+    ax.errorbar(range(num_hours), y, yerr=y_error)
+
+    ax.set_xlim([0, num_hours-1])
+    ax.set_ylim([15, 25])
+
+    plt.ylabel('Relative Humidity')
+    plt.xlabel('Hours')
+
+    filename = 'a_day_hum'+'_std_error.pdf'
+
+    fig.savefig(fig_folder+filename)
 
     # Title - Date
 
     # Function for comparing experiments too
-
-
 # def log_experiment(title):
 #     '''
 #
@@ -419,6 +486,99 @@ def plot_experiment_mean(title):
 #         }
 #     '''
 
+# def plot_search_mean(title, red, white, blue):
+#     db = database.db(db_name)
+#
+#     intervals = db.get_readings_from_experiment_by_setting_and_interval(title, red, white, blue)
+#
+#     relevant = []
+#     for interval in intervals:
+#         if len(interval) < 11:
+#             continue
+#         else:
+#             relevant.append(interval[:11])
+#
+#     for interval in relevant:
+#         print interval[0][0]
+#         # for reading in interval:
+#         #     print reading[3]
+#         print 'score: ', interval[6][3] - interval[-1][3] # Normalization starts at 7 minutes, reaches bottom ~5 min after that
+
+def score_interval_absolute(interval, norm_time, fitness_time):
+
+    co2_timeline = []
+
+    for reading in interval:
+        co2_timeline.append(reading[3])
+
+    return co2_timeline[norm_time] - co2_timeline[fitness_time]
+
+def score_interval_relative_to_ambient_co2(interval, norm_time, fitness_time):
+    co2_timeline = []
+
+    ambient_co2 = 400
+
+    for reading in interval:
+        co2_timeline.append(reading[3])
+
+    return ambient_co2 - co2_timeline[fitness_time]
+
+def score_interval_relative_to_ext_co2(interval, norm_time, fitness_time):
+    co2_timeline = []
+
+    co2_ext_timeline = []
+
+    for reading in interval:
+        co2_timeline.append(reading[3])
+        co2_ext_timeline.append(reading[4])
+
+    return np.mean(co2_ext_timeline) - co2_timeline[fitness_time]
+
+def estimate_repeatability(titles, scorefunc):
+    '''
+        comapre experiments with similar settings
+    '''
+    db = database.db(db_name)
+
+
+    settings = []
+    experiments = []
+    for title in titles:
+        readings_by_interval = db.get_readings_from_experiment_by_interval(title)
+
+        settings.append(db.get_experiment_initial_settings(title)[0])
+
+        interval_scores = []
+        for interval in readings_by_interval:
+            interval_scores.append(scorefunc(interval, 8, 17))
+
+        experiments.append(interval_scores)
+
+    print experiments
+
+    fig, ax = plt.subplots()
+
+
+    # box_data = np.concatenate((y_co2)
+
+    ax.boxplot(experiments, 0, '')  #y_co2, yerr=y_co2_error)
+
+    ax.set_xlim([0, len(titles)+1])
+    ax.set_ylim([0, 100])
+
+    heading = 'Comparison of Settings (mean(ExternalCO2) - CO2@16min)'
+
+
+
+    plt.ylabel('Fitness')
+    plt.xlabel('Setting')
+    plt.xticks(range(1, len(titles)+1), ['a', 'b', 'c', 'd', 'e', 'f', 'g'])
+    plt.title(heading)
+
+    filename = 'Comparison of Settings Relative to externalCO2.pdf'
+
+    fig.savefig(fig_folder+filename)
+
 def __parse_args():
     if len(sys.argv) < 2:
         print "Usage: python", sys.argv[0], "[experiment_title1, experiment_title2, ... experiment_titleN]"
@@ -435,6 +595,9 @@ if __name__ == "__main__":
     #now = datetime.datetime.now()
     #log_hours(now)
     #log_days(now)
+    # db_name = 'backup/plantdb'
+    # plot_hours(datetime.datetime.strptime('2017-11-18 23:00:00', date_format), num_hours=24)
+
     titles = __parse_args()
-    for title in titles:
-        plot_experiment_mean(title)
+
+    estimate_repeatability(titles, score_interval_relative_to_ext_co2)
